@@ -1,0 +1,19 @@
+{
+  "name": "celestial-ts",
+  "version": "1.0.0",
+  "description": "Implementation of celestial walk",
+  "main": "./src/index.ts",
+  "scripts": {
+    "test": "mocha -r ts-node/register src/**/*.test.ts"
+  },
+  "author": "Wouter Kuijper",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/chai": "^4.0.4",
+    "@types/mocha": "^2.2.43",
+    "chai": "^4.1.2",
+    "mocha": "^3.5.3",
+    "ts-node": "^3.3.0",
+    "typescript": "^2.5.3"
+  }
+}
