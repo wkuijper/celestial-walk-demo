@@ -134,19 +134,19 @@ describe('mesh', () => {
           let n: Its.HalfEdge = m.north
           Its.triangulate_mesh(m)
           const p: Its.Vec2 = { x: -150, y: 150 }
-          Its.insert(n, p)
+          Its.insert_vertex(m, p)
           expect(n.next.target.pos).to.equal(p)
           const p0: Its.Vec2 = { x: 0, y: 0 }
-          Its.insert(n, p0)
+          Its.insert_vertex(m, p0)
           expect(n.prev.twin!.prev.origin.pos).to.equal(p0)
-          expect(Its.insert(n, p0).pos).to.equal(p0)
+          expect(Its.insert_vertex(m, p0).pos).to.equal(p0)
     }
     {
         const m = Its.mesh();
         let n: Its.HalfEdge = m.north
         Its.triangulate_mesh(m)
         const p: Its.Vec2 = { x: 150, y: -150 }
-        Its.insert(n, p)
+        Its.insert_vertex(m, p)
         expect(n.prev.twin!.next.target.pos).to.equal(p)
     }
     {
@@ -156,9 +156,9 @@ describe('mesh', () => {
         const m = Its.mesh();
         let n: Its.HalfEdge = m.north
         Its.triangulate_mesh(m)
-        Its.insert(n, p1)
-        Its.insert(n, p2)
-        Its.insert(n, p3)
+        Its.insert_vertex(m, p1)
+        Its.insert_vertex(m, p2)
+        Its.insert_vertex(m, p3)
         //expect(n.prev.twin!.next.target.pos).to.equal(p)
     }
   });

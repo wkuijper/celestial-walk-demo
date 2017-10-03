@@ -1,0 +1,31 @@
+#mesh-div {
+    margin:0px;
+    padding:0px;
+    margin-top:5px;
+}
+
+#mesh-svg {
+    padding:0px;
+    margin:0px;
+    border:2px;
+    border-style: solid;
+    width:100%;
+}
+
+.mesh-line {
+    stroke-width:1;
+    stroke:rgb(200,200,200);
+}
+
+#arrow {
+    stroke-width:2;
+    stroke:rgb(0,0,200);
+}
+
+#arrow-head {
+    fill:rgb(0,0,200);
+}
+
+#arrow-origin {
+    fill:rgb(0,0,200);
+}

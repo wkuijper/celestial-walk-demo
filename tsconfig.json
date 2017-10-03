@@ -1,24 +1,11 @@
 {
     "compilerOptions": {
-      "target": "es6",
-      "module": "commonjs",
-      "moduleResolution": "node",
-      "noEmitHelpers": false,
-      "emitDecoratorMetadata": true,
-      "experimentalDecorators": true,
+      "strict": true,
+      "outDir": "./dist/",
       "sourceMap": true,
-      "pretty": true,
-      "allowUnreachableCode": true,
-      "allowUnusedLabels": true,
-      "noImplicitAny": false,
-      "noImplicitReturns": false,
-      "noImplicitUseStrict": false,
-      "noFallthroughCasesInSwitch": false,
-      "allowSyntheticDefaultImports": true,
-      "suppressExcessPropertyErrors": true,
-      "suppressImplicitAnyIndexErrors": true,
-      "outDir": "dist",
-      "baseUrl": "src"
+      "noImplicitAny": true,
+      "module": "commonjs",
+      "target": "es6"
     },
     "files": [
       "src/index.ts"
@@ -28,4 +15,4 @@
     ],
     "compileOnSave": false,
     "buildOnSave": false
-  }
+}
