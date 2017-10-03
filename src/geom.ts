@@ -175,6 +175,17 @@ export function gather_faces(m: Mesh): Set<Face> {
     return visited;
 }
 
+export function gather_face_edges(f: Face) {
+    let edges: HalfEdge[] = []
+    let e = f.some
+    let e2 = e
+    do {
+        edges.push(e2)
+        e2 = e2.next
+    } while (e2 !== e)
+    return edges
+}
+
 export function triangulate_mesh(m: Mesh) {
     gather_faces(m).forEach((f) => { triangulate_face(f) })
 }
@@ -398,3 +409,98 @@ export function convexify(m: Mesh) {
     }
 }
 
+export type WalkStats = { orient_tests: number, path: HalfEdge[] }
+
+export function celestial_walk_stats(einit: HalfEdge, p: Vec2): WalkStats {
+    let tests: number = 0
+    let e: HalfEdge = einit
+    let path: HalfEdge[] = [e]
+    if (++tests && strictly_right_of(line(e), p)) {
+        if (!e.twin) {
+            throw Error("out of bounds")
+        }
+        e = e.twin
+        path.push(e)
+    }
+    let e2: HalfEdge = e.next
+    while (e !== e2) {
+        if (++tests && strictly_right_of(line(e2), p)) {
+            while (e2.obtuse && (++tests && left_or_on_top_of(approx_bisector_next(e2), p))) {
+                e2 = e2.next
+            }
+            if (!e2.twin) {
+                throw Error("out of bounds")
+            }
+            e = e2.twin
+            path.push(e)
+            e2 = e.next
+        } else {
+            e2 = e2.next
+        }
+    }
+    return {orient_tests: tests, path: path}
+}
+
+export function visibility_walk_stats(einit: HalfEdge, p: Vec2): WalkStats {
+    let tests: number = 0
+    let e: HalfEdge = einit
+    let path: HalfEdge[] = [e]
+    if (++tests && strictly_right_of(line(e), p)) {
+        if (!e.twin) {
+            throw Error("out of bounds")
+        }
+        e = e.twin
+        path.push(e)
+    }
+    let e2: HalfEdge = e.next
+    while (e !== e2) {
+        if (++tests && strictly_right_of(line(e2), p)) {
+            if (!e2.twin) {
+                throw Error("out of bounds")
+            }
+            e = e2.twin
+            path.push(e)
+            e2 = e.next
+        } else {
+            e2 = e2.next
+        }
+    }
+    return {orient_tests: tests, path: path}
+}
+
+export function straight_walk_stats(einit: HalfEdge, p1: Vec2, p2: Vec2): WalkStats {
+    let tests: number = 0
+    let e: HalfEdge = einit
+    let path: HalfEdge[] = [e]
+    let orientMap: Map<Vertex,number> = new Map()
+    let vertexOrient = (v: Vertex): number => {
+        if (!orientMap.has(v)) {
+            tests++
+            orientMap.set(v, orient(p1, p2, v.pos)) 
+        }
+        return orientMap.get(v)!
+    }
+    let vertexLeft = (v: Vertex): boolean => {
+        return vertexOrient(v) >= 0
+    }
+    let vertexRight = (v: Vertex): boolean => {
+        return vertexOrient(v) <= 0
+    }
+    let e2: HalfEdge = e
+    do {
+        if (++tests && strictly_right_of(line(e2), p2)) {
+            while (!(vertexRight(e2.origin) && vertexLeft(e2.target))) {
+                e2 = e2.next
+            }
+            if (!e2.twin) {
+                throw Error("out of bounds")
+            }
+            e = e2.twin
+            path.push(e)
+            e2 = e.next
+        } else {
+            e2 = e2.next
+        }
+    } while (e2 !== e)
+    return {orient_tests: tests, path: path}
+}

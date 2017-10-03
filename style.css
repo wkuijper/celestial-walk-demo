@@ -29,3 +29,18 @@
 #arrow-origin {
     fill:rgb(0,0,200);
 }
+
+.path-face {
+    fill:rgba(100, 200, 100,0.5);
+}
+
+.path-edge {
+    stroke-width:3;
+    stroke:rgba(150,0,200,0.5); 
+}
+
+.path-stats-text {
+    font-family:"Verdana"; 
+    font-size:35;
+    fill:rgba(150,0,200,0.8); 
+}

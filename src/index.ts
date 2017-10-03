@@ -1,7 +1,7 @@
 import * as Geom from './geom';
 
-type MeshType = "Convex"|"Triangular"|"Delaunay"
-type WalkType = "Straight"|"Triangular"|"Delaunay"
+type MeshType = "Convex"|"Thin"|"Delaunay"
+type WalkType = "Straight"|"Visibility"|"Celestial"
 
 const svg_preamble = `
 <svg viewBox="-210 -210 420 420" xmlns="http://www.w3.org/2000/svg" version="1.1" id="mesh-svg">
@@ -9,25 +9,29 @@ const svg_preamble = `
         <marker id="arrow-head" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
             <path d="M0,0 L0,6 L9,3 z" class="arrowhead"/>
         </marker>
-    </defs>`
+    </defs>
+    <g id="mesh-layer">`
 const svg_postamble = `
+    </g>
+    <g id="path-layer">
+    </g>    
     <g id="arrow-layer">
     </g>
 </svg>`
 
-function mesh2svg(m: Geom.Mesh): [string] {
-    const chunks: [string] = [svg_preamble]
+function mesh2svg(m: Geom.Mesh): string {
+    const lines: [string] = [svg_preamble]
 
     let edges = Geom.gather_edges(m)
     edges.forEach((e) => {
         const p1 = e.half.origin.pos
         const p2 = e.half.target.pos
-        chunks.push('<line x1="' + p1.x + '" y1="' + p1.y + '" x2="' + p2.x + '" y2="' + p2.y + '" class="mesh-line"/>')
+        lines.push('<line x1="' + p1.x + '" y1="' + p1.y + '" x2="' + p2.x + '" y2="' + p2.y + '" class="mesh-line"/>')
     })
 
-    chunks.push(svg_postamble)
+    lines.push(svg_postamble)
 
-    return chunks
+    return lines.join("\n")
 }
 
 function random_pos(): Geom.Vec2 {
@@ -50,7 +54,7 @@ function random_mesh(mesh_type: MeshType): Geom.Mesh {
         Geom.delaunafy(m)
     } else if (mesh_type == "Convex") {
         Geom.convexify(m)
-    } else if (mesh_type == "Triangular") {
+    } else if (mesh_type == "Thin") {
         // Do nothing
     }
 
@@ -68,6 +72,7 @@ let meshSVG: SVGSVGElement;
 let arrowLayer: SVGGElement|undefined;
 let arrowOrigin: Geom.Vec2|null = null;
 let arrowTarget: Geom.Vec2|null = null;
+let pathLayer: SVGGElement|undefined;
 
 function selectMesh(meshType: MeshType) {
     if (currMeshType && meshType == currMeshType) {
@@ -76,16 +81,19 @@ function selectMesh(meshType: MeshType) {
     currMeshType = <MeshType>meshType
     currMesh = random_mesh(currMeshType)
     let meshDIV = document.getElementById("mesh-div")!
-    meshDIV.innerHTML = mesh2svg(currMesh).join()
+    meshDIV.innerHTML = mesh2svg(currMesh)
 
     meshSVG = document.getElementById("mesh-svg")! as any as SVGSVGElement
 
-    //meshSVG.addEventListener("mousedown", meshDownHandler)
-    //meshSVG.addEventListener("mouseup", meshUpHandler)
-    //meshSVG.addEventListener("mousemove", meshMoveHandler)
     meshSVG.addEventListener("click", meshClickHandler)
-    
+
     arrowLayer = document.getElementById("arrow-layer")! as any as SVGGElement
+    pathLayer = document.getElementById("path-layer")! as any as SVGGElement
+
+    arrowOrigin = null
+    arrowTarget = null
+    currPathInitFace = null
+    currWalkStats = null
 }
 
 function meshSVGEventPos(evt: MouseEvent): Geom.Vec2 {
@@ -95,64 +103,92 @@ function meshSVGEventPos(evt: MouseEvent): Geom.Vec2 {
     let x = evt.clientX
     let y = evt.clientY
     let sm = meshSVG.getScreenCTM().inverse()
-    return { x: (sm.a * x)+(sm.c*y)+sm.e, y: (sm.b*x)+(sm.d*y)+sm.f }
+    return { x: Math.round((sm.a * x)+(sm.c*y)+sm.e), y: Math.round((sm.b*x)+(sm.d*y)+sm.f) }
+}
+
+let currPathInitFace: Geom.Face|null = null
+let currWalkStats: Geom.WalkStats|null = null
+
+function updatePath() {
+    if (currPathInitFace === null || arrowOrigin === null || arrowTarget === null) {
+        return
+    }
+    if (currWalkType == "Celestial") {
+        currWalkStats = Geom.celestial_walk_stats(currPathInitFace.some, arrowTarget)
+    } else if (currWalkType == "Straight") {
+        currWalkStats = Geom.straight_walk_stats(currPathInitFace.some, arrowOrigin, arrowTarget)
+    } else if (currWalkType == "Visibility") {
+        currWalkStats = Geom.visibility_walk_stats(currPathInitFace.some, arrowTarget)
+    }
+    drawPath()
 }
 
 function meshClickHandler(this: HTMLElement, ev: Event) {
     const mev = <MouseEvent>ev
-    console.log("mouseClick: " + mev.clientX + ", " + mev.clientY)
     if (arrowOrigin === null || arrowTarget !== null) {
         arrowOrigin = meshSVGEventPos(mev)
+        if (currMesh) {
+            currPathInitFace = Geom.walk(currMesh.north, arrowOrigin)
+        }
         arrowTarget = null
+        currWalkStats = null
     } else {
         arrowTarget = meshSVGEventPos(mev)
+        if (currPathInitFace !== null) {
+            updatePath()
+        }
     }
     drawArrow()
+    drawPath()
 }
 
-/*
-function meshDownHandler(this: HTMLElement, ev: Event) {
-    const mev = <MouseEvent>ev
-    console.log("mouseDown: " + mev.clientX + ", " + mev.clientY)
-    arrowOrigin = meshSVGEventPos(mev)
-    arrowTarget = arrowOrigin
-    drawArrow()
+function face2svg(face: Geom.Face): string {
+    const p: Geom.Vec2 = face.some.origin.pos
+    const words: [string] = ['<path class="path-face" d="M ' + p.x + ' ' + p.y]
+    Geom.gather_face_edges(face).forEach((e: Geom.HalfEdge) => {
+        const p: Geom.Vec2 = e.target.pos
+        words.push(" L " + p.x + " " + p.y)
+    })
+    words.push('"/>')
+    return words.join("")
 }
 
-function meshUpHandler(this: HTMLElement, ev: Event) {
-    const mev = <MouseEvent>ev
-    console.log("mouseUp: " + mev.clientX + ", " + mev.clientY)
-    arrowOrigin = null
-    arrowTarget = null
-    drawArrow()
-}
-
-function meshMoveHandler(this: HTMLElement, ev: Event) {
-    const mev = <MouseEvent>ev
-    console.log("mouseMove!")
-    if (arrowOrigin === null) {
+function drawPath() {
+    if (!pathLayer) {
         return
     }
-    arrowTarget = meshSVGEventPos(mev)
-    drawArrow()
+    let lines: string[] = []
+    if (currPathInitFace !== null) {
+        lines.push(face2svg(currPathInitFace))
+    }
+    if (currWalkStats !== null) {
+        const currPath = currWalkStats.path
+        currPath.forEach((e) => {
+            if (e.left !== currPathInitFace) {
+                const p1 = e.origin.pos
+                const p2 = e.target.pos
+                lines.push('<line x1="' + p1.x + '" y1="' + p1.y + '" x2="' + p2.x + '" y2="' + p2.y + '" class="path-edge"/>')
+                lines.push(face2svg(e.left))
+            }
+        })
+        const currOrientTests = currWalkStats.orient_tests
+        lines.push('<text x="-180" y="-180" class="path-stats-text">faces: ' + currPath.length + ', orientation tests: ' + currOrientTests + "</text>")
+    }
+    pathLayer.innerHTML = lines.join("\n")
 }
-*/
 
 function drawArrow() {
     if (!arrowLayer) {
         return
     }
-    if (arrowOrigin === null) {
-        arrowLayer.innerHTML = ''
-        return
+    let lines: string[] = []
+    if (arrowOrigin !== null) {
+        lines.push('<circle cx="' + arrowOrigin.x + '" cy="' + arrowOrigin.y + '" r="5" id="arrow-origin"/>')
+        if (arrowTarget !== null) {
+            lines.push('<line x1="' + arrowOrigin.x + '" y1="' + arrowOrigin.y + '" x2="' + arrowTarget.x + '" y2="' + arrowTarget.y + '" id="arrow" marker-end="url(#arrow-head)"/>')
+        }
     }
-    if (arrowTarget === null) {
-        arrowLayer.innerHTML = '<circle cx="' + arrowOrigin.x + '" cy="' + arrowOrigin.y + '" r="5" id="arrow-origin"/>'
-        return
-    }
-    arrowLayer.innerHTML = 
-      '<circle cx="' + arrowOrigin.x + '" cy="' + arrowOrigin.y + '" r="5" id="arrow-origin"/>' +
-      '<line x1="' + arrowOrigin.x + '" y1="' + arrowOrigin.y + '" x2="' + arrowTarget.x + '" y2="' + arrowTarget.y + '" id="arrow" marker-end="url(#arrow-head)"/>'
+    arrowLayer.innerHTML = lines.join("\n")
 }
 
 let currWalkType: WalkType|undefined
@@ -166,9 +202,11 @@ function selectWalk(walkType: WalkType) {
         return
     }
     currWalkType = <WalkType>walkType
+    updatePath()
 }
 
 document.getElementById("select-mesh")!.addEventListener("change", selectMeshHandler);
 document.getElementById("select-walk")!.addEventListener("change", selectWalkHandler);
 
 selectMesh(<MeshType>(<HTMLSelectElement>(document.getElementById("select-mesh")!)).value);
+selectWalk(<WalkType>(<HTMLSelectElement>(document.getElementById("select-walk")!)).value);
