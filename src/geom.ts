@@ -1,3 +1,5 @@
+
+
 export type Vec2 = { x: number, y: number }
 
 export type Line = { p1: Vec2, p2: Vec2 }
