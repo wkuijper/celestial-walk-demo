@@ -22,7 +22,7 @@ const svg_postamble = `
 function mesh2svg(m: Geom.Mesh): string {
     const lines: [string] = [svg_preamble]
 
-    let edges = Geom.gather_edges(m)
+    let edges = Geom.gatherEdges(m)
     edges.forEach((e) => {
         const p1 = e.half.origin.pos
         const p2 = e.half.target.pos
@@ -43,10 +43,10 @@ function random_pos(): Geom.Vec2 {
 function random_mesh(mesh_type: MeshType): Geom.Mesh {
     let m = Geom.mesh()
 
-    Geom.triangulate_mesh(m)
+    Geom.triangulateMesh(m)
 
     for (var i = 1; i <= 200; i++) {
-        Geom.insert_vertex(m, random_pos())
+        Geom.insertVertex(m, random_pos())
     }
 
     
@@ -78,6 +78,15 @@ function selectMesh(meshType: MeshType) {
     if (currMeshType && meshType == currMeshType) {
         return
     }
+
+    document.getElementById("warning-span")!.innerHTML = ''
+    document.getElementById("select-mesh")!.classList.remove("warning")
+    document.getElementById("select-walk")!.classList.remove("warning")
+    if (currWalkType == "Visibility" && (meshType == "Thin" || meshType == "Convex")) {
+        document.getElementById("warning-span")!.innerHTML = 'May loop!'
+        document.getElementById("select-walk")!.classList.add("warning")
+    }
+
     currMeshType = <MeshType>meshType
     currMesh = random_mesh(currMeshType)
     let meshDIV = document.getElementById("mesh-div")!
@@ -114,11 +123,11 @@ function updatePath() {
         return
     }
     if (currWalkType == "Celestial") {
-        currWalkStats = Geom.celestial_walk_stats(currPathInitFace.some, arrowTarget)
+        currWalkStats = Geom.celestialWalkStats(currPathInitFace.some, arrowTarget)
     } else if (currWalkType == "Straight") {
-        currWalkStats = Geom.straight_walk_stats(currPathInitFace.some, arrowOrigin, arrowTarget)
+        currWalkStats = Geom.straightWalkStats(currPathInitFace.some, arrowOrigin, arrowTarget)
     } else if (currWalkType == "Visibility") {
-        currWalkStats = Geom.visibility_walk_stats(currPathInitFace.some, arrowTarget)
+        currWalkStats = Geom.visibilityWalkStats(currPathInitFace.some, arrowTarget)
     }
     drawPath()
 }
@@ -145,7 +154,7 @@ function meshClickHandler(this: HTMLElement, ev: Event) {
 function face2svg(face: Geom.Face): string {
     const p: Geom.Vec2 = face.some.origin.pos
     const words: [string] = ['<path class="path-face" d="M ' + p.x + ' ' + p.y]
-    Geom.gather_face_edges(face).forEach((e: Geom.HalfEdge) => {
+    Geom.gatherFaceEdges(face).forEach((e: Geom.HalfEdge) => {
         const p: Geom.Vec2 = e.target.pos
         words.push(" L " + p.x + " " + p.y)
     })
@@ -200,6 +209,13 @@ function selectWalkHandler(this: HTMLElement, ev: Event) {
 function selectWalk(walkType: WalkType) {
     if (currWalkType && walkType == currWalkType) {
         return
+    }
+    document.getElementById("warning-span")!.innerHTML = ''
+    document.getElementById("select-mesh")!.classList.remove("warning")
+    document.getElementById("select-walk")!.classList.remove("warning")
+    if (walkType == "Visibility" && (currMeshType == "Thin" || currMeshType == "Convex")) {
+        document.getElementById("warning-span")!.innerHTML = 'May loop!'
+        document.getElementById("select-mesh")!.classList.add("warning")
     }
     currWalkType = <WalkType>walkType
     updatePath()

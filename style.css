@@ -44,3 +44,7 @@
     font-size:35;
     fill:rgba(150,0,200,0.8); 
 }
+
+.warning {
+    color: rgb(200,80,80);
+}

@@ -88,7 +88,7 @@ const svg_postamble = `
 </svg>`;
 function mesh2svg(m) {
     const lines = [svg_preamble];
-    let edges = Geom.gather_edges(m);
+    let edges = Geom.gatherEdges(m);
     edges.forEach((e) => {
         const p1 = e.half.origin.pos;
         const p2 = e.half.target.pos;
@@ -104,9 +104,9 @@ function random_pos() {
 }
 function random_mesh(mesh_type) {
     let m = Geom.mesh();
-    Geom.triangulate_mesh(m);
+    Geom.triangulateMesh(m);
     for (var i = 1; i <= 200; i++) {
-        Geom.insert_vertex(m, random_pos());
+        Geom.insertVertex(m, random_pos());
     }
     if (mesh_type == "Delaunay") {
         Geom.delaunafy(m);
@@ -132,6 +132,13 @@ let pathLayer;
 function selectMesh(meshType) {
     if (currMeshType && meshType == currMeshType) {
         return;
+    }
+    document.getElementById("warning-span").innerHTML = '';
+    document.getElementById("select-mesh").classList.remove("warning");
+    document.getElementById("select-walk").classList.remove("warning");
+    if (currWalkType == "Visibility" && (meshType == "Thin" || meshType == "Convex")) {
+        document.getElementById("warning-span").innerHTML = 'May loop!';
+        document.getElementById("select-walk").classList.add("warning");
     }
     currMeshType = meshType;
     currMesh = random_mesh(currMeshType);
@@ -162,13 +169,13 @@ function updatePath() {
         return;
     }
     if (currWalkType == "Celestial") {
-        currWalkStats = Geom.celestial_walk_stats(currPathInitFace.some, arrowTarget);
+        currWalkStats = Geom.celestialWalkStats(currPathInitFace.some, arrowTarget);
     }
     else if (currWalkType == "Straight") {
-        currWalkStats = Geom.straight_walk_stats(currPathInitFace.some, arrowOrigin, arrowTarget);
+        currWalkStats = Geom.straightWalkStats(currPathInitFace.some, arrowOrigin, arrowTarget);
     }
     else if (currWalkType == "Visibility") {
-        currWalkStats = Geom.visibility_walk_stats(currPathInitFace.some, arrowTarget);
+        currWalkStats = Geom.visibilityWalkStats(currPathInitFace.some, arrowTarget);
     }
     drawPath();
 }
@@ -194,7 +201,7 @@ function meshClickHandler(ev) {
 function face2svg(face) {
     const p = face.some.origin.pos;
     const words = ['<path class="path-face" d="M ' + p.x + ' ' + p.y];
-    Geom.gather_face_edges(face).forEach((e) => {
+    Geom.gatherFaceEdges(face).forEach((e) => {
         const p = e.target.pos;
         words.push(" L " + p.x + " " + p.y);
     });
@@ -244,6 +251,13 @@ function selectWalkHandler(ev) {
 function selectWalk(walkType) {
     if (currWalkType && walkType == currWalkType) {
         return;
+    }
+    document.getElementById("warning-span").innerHTML = '';
+    document.getElementById("select-mesh").classList.remove("warning");
+    document.getElementById("select-walk").classList.remove("warning");
+    if (walkType == "Visibility" && (currMeshType == "Thin" || currMeshType == "Convex")) {
+        document.getElementById("warning-span").innerHTML = 'May loop!';
+        document.getElementById("select-mesh").classList.add("warning");
     }
     currWalkType = walkType;
     updatePath();
@@ -310,46 +324,46 @@ function incircle(a, b, c, d) {
     return ((ad.x * ad.x + ad.y * ad.y) * (bd.x * cd.y - cd.x * bd.y) + (bd.x * bd.x + bd.y * bd.y) * (cd.x * ad.y - ad.x * cd.y) + (cd.x * cd.x + cd.y * cd.y) * (ad.x * bd.y - bd.x * ad.y)) > 0;
 }
 exports.incircle = incircle;
-function strictly_right_of(l, p) {
+function strictlyRightOf(l, p) {
     return orient(l.p1, l.p2, p) < 0;
 }
-exports.strictly_right_of = strictly_right_of;
-function right_or_on_top_of(l, p) {
+exports.strictlyRightOf = strictlyRightOf;
+function rightOrOnTopOf(l, p) {
     return orient(l.p1, l.p2, p) <= 0;
 }
-exports.right_or_on_top_of = right_or_on_top_of;
-function on_line(l, p) {
+exports.rightOrOnTopOf = rightOrOnTopOf;
+function onLine(l, p) {
     return orient(l.p1, l.p2, p) == 0;
 }
-exports.on_line = on_line;
-function on_point(p1, p2) {
+exports.onLine = onLine;
+function pointsCoincide(p1, p2) {
     return p1.x == p2.x && p1.y == p2.y;
 }
-exports.on_point = on_point;
-function strictly_left_of(l, p) {
+exports.pointsCoincide = pointsCoincide;
+function strictlyLeftOf(l, p) {
     return orient(l.p1, l.p2, p) > 0;
 }
-exports.strictly_left_of = strictly_left_of;
-function left_or_on_top_of(l, p) {
+exports.strictlyLeftOf = strictlyLeftOf;
+function leftOrOnTopOf(l, p) {
     return orient(l.p1, l.p2, p) >= 0;
 }
-exports.left_or_on_top_of = left_or_on_top_of;
+exports.leftOrOnTopOf = leftOrOnTopOf;
 function line(e) {
     return { p1: e.origin.pos, p2: e.target.pos };
 }
 exports.line = line;
-function line_by_point_and_dir(p, dir) {
+function lineByPointAndDir(p, dir) {
     return { p1: p, p2: plus(p, dir) };
 }
-exports.line_by_point_and_dir = line_by_point_and_dir;
-function rotate_left(v) {
+exports.lineByPointAndDir = lineByPointAndDir;
+function rotateLeft(v) {
     return { x: -v.y, y: v.x };
 }
-exports.rotate_left = rotate_left;
-function rotate_right(v) {
+exports.rotateLeft = rotateLeft;
+function rotateRight(v) {
     return { x: v.y, y: -v.x };
 }
-exports.rotate_right = rotate_right;
+exports.rotateRight = rotateRight;
 function plus(a, b) {
     return { x: a.x + b.x, y: a.y + b.y };
 }
@@ -358,17 +372,21 @@ function minus(a, b) {
     return { x: a.x - b.x, y: a.y - b.y };
 }
 exports.minus = minus;
-function approx_bisector_next(e2) {
+function approxBisectorNext(e2) {
     let e3 = e2.next;
-    return line_by_point_and_dir(e2.target.pos, rotate_right(minus(e3.target.pos, e2.origin.pos)));
+    return lineByPointAndDir(e2.target.pos, rotateRight(minus(e3.target.pos, e2.origin.pos)));
 }
-exports.approx_bisector_next = approx_bisector_next;
-function set_obtuseness(e2) {
+exports.approxBisectorNext = approxBisectorNext;
+function computeObtuseness(e2) {
     let e3 = e2.next;
-    e2.obtuse = strictly_right_of(line_by_point_and_dir(e2.target.pos, rotate_left(minus(e2.target.pos, e2.origin.pos))), e3.target.pos);
+    return strictlyRightOf(lineByPointAndDir(e2.target.pos, rotateLeft(minus(e2.target.pos, e2.origin.pos))), e3.target.pos);
 }
-exports.set_obtuseness = set_obtuseness;
-function gather_half_edges(m) {
+exports.computeObtuseness = computeObtuseness;
+function precomputeObtuseness(e2) {
+    e2.obtuse = computeObtuseness(e2);
+}
+exports.precomputeObtuseness = precomputeObtuseness;
+function gatherHalfEdges(m) {
     let visited = new Set();
     let waiting = [];
     let queue = (e) => {
@@ -388,8 +406,8 @@ function gather_half_edges(m) {
     }
     return visited;
 }
-exports.gather_half_edges = gather_half_edges;
-function gather_edges(m) {
+exports.gatherHalfEdges = gatherHalfEdges;
+function gatherEdges(m) {
     let visited = new Set();
     let waiting = [];
     let queue = (e) => {
@@ -408,8 +426,8 @@ function gather_edges(m) {
     }
     return visited;
 }
-exports.gather_edges = gather_edges;
-function gather_faces(m) {
+exports.gatherEdges = gatherEdges;
+function gatherFaces(m) {
     let visited = new Set();
     let waiting = [];
     let queue = (f) => {
@@ -430,8 +448,8 @@ function gather_faces(m) {
     }
     return visited;
 }
-exports.gather_faces = gather_faces;
-function gather_face_edges(f) {
+exports.gatherFaces = gatherFaces;
+function gatherFaceEdges(f) {
     let edges = [];
     let e = f.some;
     let e2 = e;
@@ -441,12 +459,12 @@ function gather_face_edges(f) {
     } while (e2 !== e);
     return edges;
 }
-exports.gather_face_edges = gather_face_edges;
-function triangulate_mesh(m) {
-    gather_faces(m).forEach((f) => { triangulate_face(f); });
+exports.gatherFaceEdges = gatherFaceEdges;
+function triangulateMesh(m) {
+    gatherFaces(m).forEach((f) => { triangulateFace(f); });
 }
-exports.triangulate_mesh = triangulate_mesh;
-function delete_edge(e) {
+exports.triangulateMesh = triangulateMesh;
+function deleteEdge(e) {
     // e.twin must be defined 
     // e.left must be triangle
     e.prev.left = e.twin.left;
@@ -456,32 +474,32 @@ function delete_edge(e) {
     e.next.prev = e.twin.prev;
     e.prev.next = e.twin.next;
     e.twin.left.some = e.next;
-    obtussle(e.prev);
-    obtussle(e.twin.prev);
+    precomputeObtuseness(e.prev);
+    precomputeObtuseness(e.twin.prev);
 }
-exports.delete_edge = delete_edge;
-function kink_left_next(e) {
+exports.deleteEdge = deleteEdge;
+function kinkLeftNext(e) {
     let e2 = e.next;
-    return strictly_left_of(line(e), e2.target.pos);
+    return strictlyLeftOf(line(e), e2.target.pos);
 }
-exports.kink_left_next = kink_left_next;
-function triangulate_face(f) {
+exports.kinkLeftNext = kinkLeftNext;
+function triangulateFace(f) {
     let e = f.some;
     let e2 = e.next;
     while (e2.next !== e.prev) {
-        while (!kink_left_next(e)) {
+        while (!kinkLeftNext(e)) {
             e = e.next;
         }
-        e = cut_peak(e);
+        e = cutPeak(e);
         e2 = e.next;
     }
 }
-exports.triangulate_face = triangulate_face;
-function obtussle(e) {
-    set_obtuseness(e);
-    set_obtuseness(e.prev);
+exports.triangulateFace = triangulateFace;
+function precomputeObtusenessForNewHalfEdge(e) {
+    precomputeObtuseness(e);
+    precomputeObtuseness(e.prev);
 }
-function cut_peak(e) {
+function cutPeak(e) {
     // angle(e, e.next) must kink left
     let e2 = e.next;
     let e3 = { origin: e2.target, target: e.origin, prev: e2, next: e };
@@ -499,13 +517,14 @@ function cut_peak(e) {
     e.left = ff;
     e2.left = ff;
     e3.left = ff;
-    obtussle(e3);
-    obtussle(e3i);
+    precomputeObtusenessForNewHalfEdge(e3);
+    precomputeObtusenessForNewHalfEdge(e3i);
     return e3i;
 }
-exports.cut_peak = cut_peak;
-function grow_edge(e, p) {
-    // p must be in e.left, (e.origin, p) and (e.target, p) must not intersect anything
+exports.cutPeak = cutPeak;
+function growEdge(e, p) {
+    // pre: p must be properly in e.left, (e.origin, p) and (e.target, p) must not intersect anything
+    // post: a vertex at p and the remainder of the face triangulated
     let v = { pos: p };
     let e2 = { origin: e.target, target: v, prev: e };
     let e3 = { origin: v, target: e.origin, prev: e2, next: e };
@@ -531,69 +550,69 @@ function grow_edge(e, p) {
     e.left = ff;
     e2.left = ff;
     e3.left = ff;
-    obtussle(e2);
-    obtussle(e3);
-    obtussle(e2i);
-    obtussle(e3i);
-    triangulate_face(e3i.left);
+    precomputeObtusenessForNewHalfEdge(e2);
+    precomputeObtusenessForNewHalfEdge(e2i);
+    precomputeObtusenessForNewHalfEdge(e3);
+    precomputeObtusenessForNewHalfEdge(e3i);
+    triangulateFace(e3i.left); // restore convexity
     return v;
 }
-exports.grow_edge = grow_edge;
-function flipable_edge(e) {
+exports.growEdge = growEdge;
+function flipableEdge(e) {
     // e.left and e.twin.left must be triangles
     // returns true iff e is the diagonal of a convex quadrilateral with no co-linear sides
-    return strictly_left_of(line(e.twin.prev), e.next.target.pos)
-        && strictly_left_of(line(e.twin.next), e.next.target.pos);
+    return strictlyLeftOf(line(e.twin.prev), e.next.target.pos)
+        && strictlyLeftOf(line(e.twin.next), e.next.target.pos);
 }
-exports.flipable_edge = flipable_edge;
-function flip_edge(e) {
+exports.flipableEdge = flipableEdge;
+function flipEdge(e) {
     // e must be diagonal of convex quadrilateral with no co-linear sides
     let eprev = e.prev;
-    delete_edge(e);
-    return cut_peak(eprev);
+    deleteEdge(e);
+    return cutPeak(eprev);
 }
-exports.flip_edge = flip_edge;
-function insert_vertex(m, p) {
-    return insert_vertex_from_edge(m.north, p);
+exports.flipEdge = flipEdge;
+function insertVertex(m, p) {
+    return insertVertexFromEdge(m.north, p);
 }
-exports.insert_vertex = insert_vertex;
-function insert_vertex_from_edge(e, p) {
+exports.insertVertex = insertVertex;
+function insertVertexFromEdge(e, p) {
     // pre: m must be triangular
     // post: m will be triangular with vertex at p
     let split_edge = (esplit, estay) => {
         // p must be properly on esplit, estay.next == esplit
-        delete_edge(esplit);
-        return grow_edge(estay, p);
+        deleteEdge(esplit);
+        return growEdge(estay, p);
     };
     let f = walk(e, p);
     let e1 = f.some;
     let e2 = e1.next;
     let e3 = e2.next;
-    if (on_point(e1.origin.pos, p)) {
+    if (pointsCoincide(e1.origin.pos, p)) {
         return e1.origin;
     }
-    if (on_point(e2.origin.pos, p)) {
+    if (pointsCoincide(e2.origin.pos, p)) {
         return e2.origin;
     }
-    if (on_point(e3.origin.pos, p)) {
+    if (pointsCoincide(e3.origin.pos, p)) {
         return e3.origin;
     }
-    if (on_line(line(e1), p)) {
+    if (onLine(line(e1), p)) {
         return split_edge(e1, e3);
     }
-    if (on_line(line(e2), p)) {
+    if (onLine(line(e2), p)) {
         return split_edge(e2, e1);
     }
-    if (on_line(line(e3), p)) {
+    if (onLine(line(e3), p)) {
         return split_edge(e3, e2);
     }
     // split face
-    return grow_edge(e1, p);
+    return growEdge(e1, p);
 }
-exports.insert_vertex_from_edge = insert_vertex_from_edge;
+exports.insertVertexFromEdge = insertVertexFromEdge;
 function walk(einit, p) {
     let e = einit;
-    if (strictly_right_of(line(e), p)) {
+    if (strictlyRightOf(line(e), p)) {
         if (!e.twin) {
             throw Error("out of bounds");
         }
@@ -601,8 +620,8 @@ function walk(einit, p) {
     }
     let e2 = e.next;
     while (e !== e2) {
-        if (strictly_right_of(line(e2), p)) {
-            while (e2.obtuse && left_or_on_top_of(approx_bisector_next(e2), p)) {
+        if (strictlyRightOf(line(e2), p)) {
+            while (e2.obtuse && leftOrOnTopOf(approxBisectorNext(e2), p)) {
                 e2 = e2.next;
             }
             if (!e2.twin) {
@@ -621,7 +640,7 @@ exports.walk = walk;
 function delaunafy(m) {
     // pre: m must be triangular
     // post: m will be triangular and maximally delaunay
-    let waiting_set = gather_edges(m);
+    let waiting_set = gatherEdges(m);
     let waiting_list = [];
     waiting_set.forEach((ee) => { waiting_list.push(ee); });
     let queue = (ee) => {
@@ -639,8 +658,8 @@ function delaunafy(m) {
         }
         if (incircle(e.origin.pos, e.target.pos, e.next.target.pos, e.twin.next.target.pos)
             || incircle(e.twin.origin.pos, e.twin.target.pos, e.twin.next.target.pos, e.next.target.pos)) {
-            if (flipable_edge(e)) {
-                e = flip_edge(e);
+            if (flipableEdge(e)) {
+                e = flipEdge(e);
                 queue(e.next.edge);
                 queue(e.prev.edge);
                 queue(e.twin.next.edge);
@@ -654,15 +673,15 @@ function convexify(m) {
     // pre: m must be triangular
     // post: m will (almost certainly?) no longer be triangular but still convex
     delaunafy(m);
-    let triangles = gather_faces(m);
+    let triangles = gatherFaces(m);
     let waiting = [];
     let deleted = (e) => {
         if (e.twin
-            && left_or_on_top_of(line(e.twin.prev), e.next.target.pos)
-            && left_or_on_top_of(line(e.twin.next), e.next.target.pos)) {
+            && leftOrOnTopOf(line(e.twin.prev), e.next.target.pos)
+            && leftOrOnTopOf(line(e.twin.next), e.next.target.pos)) {
             triangles.delete(e.left);
             triangles.delete(e.twin.left);
-            delete_edge(e);
+            deleteEdge(e);
             return true;
         }
         return false;
@@ -685,11 +704,11 @@ function convexify(m) {
     }
 }
 exports.convexify = convexify;
-function celestial_walk_stats(einit, p) {
+function celestialWalkStats(einit, p) {
     let tests = 0;
     let e = einit;
     let path = [e];
-    if (++tests && strictly_right_of(line(e), p)) {
+    if (++tests && strictlyRightOf(line(e), p)) {
         if (!e.twin) {
             throw Error("out of bounds");
         }
@@ -698,8 +717,8 @@ function celestial_walk_stats(einit, p) {
     }
     let e2 = e.next;
     while (e !== e2) {
-        if (++tests && strictly_right_of(line(e2), p)) {
-            while (e2.obtuse && (++tests && left_or_on_top_of(approx_bisector_next(e2), p))) {
+        if (++tests && strictlyRightOf(line(e2), p)) {
+            while (e2.obtuse && (++tests && leftOrOnTopOf(approxBisectorNext(e2), p))) {
                 e2 = e2.next;
             }
             if (!e2.twin) {
@@ -715,12 +734,12 @@ function celestial_walk_stats(einit, p) {
     }
     return { orient_tests: tests, path: path };
 }
-exports.celestial_walk_stats = celestial_walk_stats;
-function visibility_walk_stats(einit, p) {
+exports.celestialWalkStats = celestialWalkStats;
+function visibilityWalkStats(einit, p) {
     let tests = 0;
     let e = einit;
     let path = [e];
-    if (++tests && strictly_right_of(line(e), p)) {
+    if (++tests && strictlyRightOf(line(e), p)) {
         if (!e.twin) {
             throw Error("out of bounds");
         }
@@ -729,7 +748,7 @@ function visibility_walk_stats(einit, p) {
     }
     let e2 = e.next;
     while (e !== e2) {
-        if (++tests && strictly_right_of(line(e2), p)) {
+        if (++tests && strictlyRightOf(line(e2), p)) {
             if (!e2.twin) {
                 throw Error("out of bounds");
             }
@@ -743,18 +762,29 @@ function visibility_walk_stats(einit, p) {
     }
     return { orient_tests: tests, path: path };
 }
-exports.visibility_walk_stats = visibility_walk_stats;
-function straight_walk_stats(einit, p1, p2) {
+exports.visibilityWalkStats = visibilityWalkStats;
+function straightWalkStats(einit, p1, p2) {
     let tests = 0;
     let e = einit;
     let path = [e];
-    let orientMap = new Map();
+    let vertexOrientCache = new Map();
+    // NOTE: Dynamic programming is used here to ensure we get
+    // the absolutely optimal implementation in terms of the
+    // number of orientation tests. In practice one would need
+    // to unroll the code significantly in order to eliminate 
+    // the dynamic lookups without incurring superfluous 
+    // orientation tests. We haven't done so here because that
+    // would lead to a lot of implementation complexity, hard
+    // to read code, bugs etc.
+    // As a result, this code is fair ONLY when comparing
+    // based on the number of orientation tests, NOT when 
+    // comparing based on wall-clock time.
     let vertexOrient = (v) => {
-        if (!orientMap.has(v)) {
+        if (!vertexOrientCache.has(v)) {
             tests++;
-            orientMap.set(v, orient(p1, p2, v.pos));
+            vertexOrientCache.set(v, orient(p1, p2, v.pos));
         }
-        return orientMap.get(v);
+        return vertexOrientCache.get(v);
     };
     let vertexLeft = (v) => {
         return vertexOrient(v) >= 0;
@@ -764,7 +794,7 @@ function straight_walk_stats(einit, p1, p2) {
     };
     let e2 = e;
     do {
-        if (++tests && strictly_right_of(line(e2), p2)) {
+        if (++tests && strictlyRightOf(line(e2), p2)) {
             while (!(vertexRight(e2.origin) && vertexLeft(e2.target))) {
                 e2 = e2.next;
             }
@@ -781,7 +811,7 @@ function straight_walk_stats(einit, p1, p2) {
     } while (e2 !== e);
     return { orient_tests: tests, path: path };
 }
-exports.straight_walk_stats = straight_walk_stats;
+exports.straightWalkStats = straightWalkStats;
 
 
 /***/ })
