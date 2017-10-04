@@ -1,4 +1,8 @@
 {
+  "repository": { 
+    "type" : "git",
+    "url" : "https://github.com/wkuijper/celestial-walk-demo"
+  },
   "name": "celestial-walk-demo",
   "version": "1.0.0",
   "description": "Implementation and interactive demo of celestial walk",
@@ -11,11 +15,12 @@
   "devDependencies": {
     "@types/chai": "^4.0.4",
     "@types/mocha": "^2.2.43",
+    "awesome-typescript-loader": "^3.2.3",
     "chai": "^4.1.2",
     "mocha": "^3.5.3",
-    "ts-node": "^3.3.0",
-    "awesome-typescript-loader": "^3.2.3",
     "source-map-loader": "^0.2.1",
-    "typescript": "^2.5.3"
+    "ts-node": "^3.3.0",
+    "typescript": "^2.5.3",
+    "webpack": "^3.6.0"
   }
 }
