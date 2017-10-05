@@ -1,14 +1,15 @@
 {
-  "repository": { 
-    "type" : "git",
-    "url" : "https://github.com/wkuijper/celestial-walk-demo"
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wkuijper/celestial-walk-demo"
   },
   "name": "celestial-walk-demo",
   "version": "1.0.0",
   "description": "Implementation and interactive demo of celestial walk",
   "main": "./src/index.ts",
   "scripts": {
-    "test": "mocha -r ts-node/register src/**/*.test.ts"
+    "test": "mocha -r ts-node/register src/**/*.test.ts",
+    "start": "webpack-dev-server"
   },
   "author": "Wouter Kuijper",
   "license": "ISC",
@@ -21,6 +22,8 @@
     "source-map-loader": "^0.2.1",
     "ts-node": "^3.3.0",
     "typescript": "^2.5.3",
-    "webpack": "^3.6.0"
-  }
+    "webpack": "^3.6.0",
+    "webpack-dev-server": "^2.9.1"
+  },
+  "dependencies": {}
 }

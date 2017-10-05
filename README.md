@@ -12,7 +12,7 @@ coordinates robustly.
 Running
 -------
 
-Via this repository's github [page](https://wkuijper.github.com/celestial-walk-demo/). Or locally, just open `index.html` with a modern EC6 compliant browser.
+Via this repository's github [page](https://wkuijper.github.com/celestial-walk-demo/). Or locally, just open `index.html` with a modern ES6 compliant browser.
 
 Usage
 -----
@@ -45,6 +45,6 @@ Run unit tests:
 
     npm test
 
-Start webpack:
+Start the app:
 
-    webpack --watch
+    npm start
