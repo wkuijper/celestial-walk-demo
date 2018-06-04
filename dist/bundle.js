@@ -71,54 +71,6 @@
 
 Object.defineProperty(exports, "__esModule", { value: true });
 const Geom = __webpack_require__(1);
-const svg_preamble = `
-<svg viewBox="-210 -210 420 420" xmlns="http://www.w3.org/2000/svg" version="1.1" id="mesh-svg">
-    <defs>
-        <marker id="arrow-head" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
-            <path d="M0,0 L0,6 L9,3 z" class="arrowhead"/>
-        </marker>
-    </defs>
-    <g id="mesh-layer">`;
-const svg_postamble = `
-    </g>
-    <g id="path-layer">
-    </g>    
-    <g id="arrow-layer">
-    </g>
-</svg>`;
-function mesh2svg(m) {
-    const lines = [svg_preamble];
-    let edges = Geom.gatherEdges(m);
-    edges.forEach((e) => {
-        const p1 = e.half.origin.pos;
-        const p2 = e.half.target.pos;
-        lines.push('<line x1="' + p1.x + '" y1="' + p1.y + '" x2="' + p2.x + '" y2="' + p2.y + '" class="mesh-line"/>');
-    });
-    lines.push(svg_postamble);
-    return lines.join("\n");
-}
-function random_pos() {
-    let x = Math.floor(Math.random() * 800) - 400;
-    let y = Math.floor(Math.random() * 800) - 400;
-    return { x: x, y: y };
-}
-function random_mesh(mesh_type) {
-    let m = Geom.mesh();
-    Geom.triangulateMesh(m);
-    for (var i = 1; i <= 200; i++) {
-        Geom.insertVertex(m, random_pos());
-    }
-    if (mesh_type == "Delaunay") {
-        Geom.delaunafy(m);
-    }
-    else if (mesh_type == "Convex") {
-        Geom.convexify(m);
-    }
-    else if (mesh_type == "Thin") {
-        // Do nothing
-    }
-    return m;
-}
 let currMesh;
 let currMeshType;
 function selectMeshHandler(ev) {
@@ -141,9 +93,9 @@ function selectMesh(meshType) {
         document.getElementById("select-walk").classList.add("warning");
     }
     currMeshType = meshType;
-    currMesh = random_mesh(currMeshType);
+    currMesh = Geom.randomMesh(currMeshType);
     let meshDIV = document.getElementById("mesh-div");
-    meshDIV.innerHTML = mesh2svg(currMesh);
+    meshDIV.innerHTML = Geom.mesh2svg(currMesh);
     meshSVG = document.getElementById("mesh-svg");
     meshSVG.addEventListener("click", meshClickHandler);
     arrowLayer = document.getElementById("arrow-layer");
@@ -159,24 +111,16 @@ function meshSVGEventPos(evt) {
     }
     let x = evt.clientX;
     let y = evt.clientY;
-    let sm = meshSVG.getScreenCTM().inverse();
+    let sm = meshSVG.getScreenCTM().inverse(); // TODO: handle properly the fact that getScreenCTM can return null
     return { x: Math.round((sm.a * x) + (sm.c * y) + sm.e), y: Math.round((sm.b * x) + (sm.d * y) + sm.f) };
 }
 let currPathInitFace = null;
 let currWalkStats = null;
 function updatePath() {
-    if (currPathInitFace === null || arrowOrigin === null || arrowTarget === null) {
+    if (currPathInitFace === null || arrowOrigin === null || arrowTarget === null || currWalkType == undefined) {
         return;
     }
-    if (currWalkType == "Celestial") {
-        currWalkStats = Geom.celestialWalkStats(currPathInitFace.some, arrowTarget);
-    }
-    else if (currWalkType == "Straight") {
-        currWalkStats = Geom.straightWalkStats(currPathInitFace.some, arrowOrigin, arrowTarget);
-    }
-    else if (currWalkType == "Visibility") {
-        currWalkStats = Geom.visibilityWalkStats(currPathInitFace.some, arrowTarget);
-    }
+    currWalkStats = Geom.walkStats(currWalkType, currPathInitFace.some, arrowOrigin, arrowTarget);
     drawPath();
 }
 function meshClickHandler(ev) {
@@ -198,23 +142,13 @@ function meshClickHandler(ev) {
     drawArrow();
     drawPath();
 }
-function face2svg(face) {
-    const p = face.some.origin.pos;
-    const words = ['<path class="path-face" d="M ' + p.x + ' ' + p.y];
-    Geom.gatherFaceEdges(face).forEach((e) => {
-        const p = e.target.pos;
-        words.push(" L " + p.x + " " + p.y);
-    });
-    words.push('"/>');
-    return words.join("");
-}
 function drawPath() {
     if (!pathLayer) {
         return;
     }
     let lines = [];
     if (currPathInitFace !== null) {
-        lines.push(face2svg(currPathInitFace));
+        lines.push(Geom.face2svg(currPathInitFace));
     }
     if (currWalkStats !== null) {
         const currPath = currWalkStats.path;
@@ -223,7 +157,7 @@ function drawPath() {
                 const p1 = e.origin.pos;
                 const p2 = e.target.pos;
                 lines.push('<line x1="' + p1.x + '" y1="' + p1.y + '" x2="' + p2.x + '" y2="' + p2.y + '" class="path-edge"/>');
-                lines.push(face2svg(e.left));
+                lines.push(Geom.face2svg(e.left));
             }
         });
         const currOrientTests = currWalkStats.orient_tests;
@@ -658,7 +592,7 @@ function delaunafy(m) {
         }
         if (incircle(e.origin.pos, e.target.pos, e.next.target.pos, e.twin.next.target.pos)
             || incircle(e.twin.origin.pos, e.twin.target.pos, e.twin.next.target.pos, e.next.target.pos)) {
-            if (flipableEdge(e)) {
+            if (flipableEdge(e)) { // <-- defensive
                 e = flipEdge(e);
                 queue(e.next.edge);
                 queue(e.prev.edge);
@@ -812,6 +746,174 @@ function straightWalkStats(einit, p1, p2) {
     return { orient_tests: tests, path: path };
 }
 exports.straightWalkStats = straightWalkStats;
+function walkStats(walkType, initEdge, p1, p2) {
+    if (walkType == "Celestial") {
+        return celestialWalkStats(initEdge, p2);
+    }
+    else if (walkType == "Straight") {
+        return straightWalkStats(initEdge, p1, p2);
+    }
+    // (walkType == "Visibility")
+    return visibilityWalkStats(initEdge, p2);
+}
+exports.walkStats = walkStats;
+const html_preamble = `
+<html>
+  <head>
+    <title>`;
+const html_2amble = `
+    </title>
+    <style>
+    html, body {
+        height: 95%;
+    }
+    #mesh-div {
+        height: 100%;
+        min-height: 100%;
+	    display: flex;
+        flex-direction: column;
+        padding: 20pt;
+    }
+    #mesh-svg {
+        display: flex;
+		flex-direction: column;
+        justify-content: center;
+        border:2px;
+        border-style: solid;
+    }
+    .mesh-line {
+        stroke-width:1;
+        stroke:rgb(200,200,200);
+    }
+    #arrow {
+        stroke-width:2;
+        stroke:rgb(0,0,200);
+    }
+    #arrow-head {
+        fill:rgb(0,0,200);
+    }
+    #arrow-origin {
+        fill:rgb(0,0,200);
+    }
+    .path-face {
+        fill:rgba(100, 200, 100,0.5);
+    }
+    .path-edge {
+        stroke-width:3;
+        stroke:rgba(150,0,200,0.5); 
+    }
+    </style>
+  </head>
+  <body>
+    <div id="mesh-div">`;
+const html_postamble = `
+    </div>
+  </body>
+</html>`;
+function mesh2html(title, m, walkStats, line) {
+    const lines = [html_preamble];
+    lines.push(title);
+    lines.push(html_2amble);
+    lines.push(mesh2svg(m, walkStats, line));
+    lines.push(html_postamble);
+    return lines.join("\n");
+}
+exports.mesh2html = mesh2html;
+const svg_preamble = `
+<svg viewBox="-210 -210 420 420" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" version="1.1" id="mesh-svg">
+    <defs>
+        <marker id="arrow-head" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" class="arrowhead"/>
+        </marker>
+    </defs>
+    <g id="mesh-layer">`;
+const svg_2amble = `
+    </g>
+    <g id="path-layer">`;
+const svg_3amble = `
+    </g>
+    <g id="arrow-layer">`;
+const svg_postamble = `
+    </g>
+</svg>`;
+function mesh2svg(m, walkStats, line) {
+    const lines = [svg_preamble];
+    let edges = gatherEdges(m);
+    edges.forEach((e) => {
+        const p1 = e.half.origin.pos;
+        const p2 = e.half.target.pos;
+        lines.push('<line x1="' + p1.x + '" y1="' + p1.y + '" x2="' + p2.x + '" y2="' + p2.y + '" class="mesh-line"/>');
+    });
+    lines.push(svg_2amble);
+    if (walkStats) {
+        const path = walkStats.path;
+        path.forEach((e) => {
+            const p1 = e.origin.pos;
+            const p2 = e.target.pos;
+            lines.push('<line x1="' + p1.x + '" y1="' + p1.y + '" x2="' + p2.x + '" y2="' + p2.y + '" class="path-edge"/>');
+            lines.push(face2svg(e.left));
+        });
+    }
+    lines.push(svg_3amble);
+    if (line) {
+        const p1 = line.p1;
+        const p2 = line.p2;
+        lines.push('<circle cx="' + p1.x + '" cy="' + p1.y + '" r="5" id="arrow-origin"/>');
+        if (p2 !== undefined) {
+            lines.push('<line x1="' + p1.x + '" y1="' + p1.y + '" x2="' + p2.x + '" y2="' + p2.y + '" id="arrow" marker-end="url(#arrow-head)"/>');
+        }
+    }
+    lines.push(svg_postamble);
+    return lines.join("\n");
+}
+exports.mesh2svg = mesh2svg;
+function face2svg(face) {
+    const p = face.some.origin.pos;
+    const words = ['<path class="path-face" d="M ' + p.x + ' ' + p.y];
+    gatherFaceEdges(face).forEach((e) => {
+        const p = e.target.pos;
+        words.push(" L " + p.x + " " + p.y);
+    });
+    words.push('"/>');
+    return words.join("");
+}
+exports.face2svg = face2svg;
+function randomPoint() {
+    let x = Math.floor(Math.random() * 800) - 400;
+    let y = Math.floor(Math.random() * 800) - 400;
+    return { x: x, y: y };
+}
+exports.randomPoint = randomPoint;
+function randomPointCloud(n) {
+    const pointCloud = [];
+    for (var i = 0; i < n; i++) {
+        pointCloud.push(randomPoint());
+    }
+    return pointCloud;
+}
+exports.randomPointCloud = randomPointCloud;
+function randomMesh(meshType) {
+    return meshFromPointCloud(meshType, randomPointCloud(200));
+}
+exports.randomMesh = randomMesh;
+function meshFromPointCloud(meshType, pointCloud) {
+    let m = mesh();
+    triangulateMesh(m);
+    pointCloud.forEach((p) => {
+        insertVertex(m, p);
+    });
+    if (meshType == "Delaunay") {
+        delaunafy(m);
+    }
+    else if (meshType == "Convex") {
+        convexify(m);
+    }
+    else if (meshType == "Thin") {
+        // Do nothing
+    }
+    return m;
+}
+exports.meshFromPointCloud = meshFromPointCloud;
 
 
 /***/ })

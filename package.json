@@ -9,13 +9,15 @@
   "main": "./src/index.ts",
   "scripts": {
     "test": "mocha -r ts-node/register src/**/*.test.ts",
-    "start": "webpack-dev-server"
+    "start": "webpack-dev-server",
+    "benchmark": "ts-node src/benchmark.ts"
   },
   "author": "Wouter Kuijper",
   "license": "ISC",
   "devDependencies": {
     "@types/chai": "^4.0.4",
     "@types/mocha": "^2.2.43",
+    "@types/node": "^10.0.3",
     "awesome-typescript-loader": "^3.2.3",
     "chai": "^4.1.2",
     "mocha": "^3.5.3",

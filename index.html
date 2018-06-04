@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <meta charset="UTF-8" />
     <title>Celestial Walk Demo</title>
@@ -8,20 +9,30 @@
 </head>
 
 <body>
-    <form>Mesh:&nbsp;<select id="select-mesh">
-                <option value="Delaunay">Delaunay</option>
-                <option value="Thin">Thin</option>
-                <option value="Convex">Convex</option>&nbsp;
-        </select>Walk:&nbsp;<select id="select-walk">
-                <option value="Visibility">Visibility</option>
-                <option value="Straight">Straight</option>
-                <option value="Celestial">Celestial</option>
-        </select>&nbsp;
-        <span id="warning-span" class="warning"></span>
-    </form>
-    <div id="mesh-div">
+    <div id="content-div">
+        <div id="menu-div">
+            <div class="menu-item">
+                Mesh:&nbsp;
+                <select id="select-mesh">
+                    <option value="Delaunay">Delaunay</option>
+                    <option value="Thin">Thin</option>
+                    <option value="Convex">Convex</option>&nbsp;
+                </select>
+            </div>
+            <div class="menu-item">
+                Walk:&nbsp;
+                <select id="select-walk">
+                    <option value="Visibility">Visibility</option>
+                    <option value="Straight">Straight</option>
+                    <option value="Celestial">Celestial</option>
+                </select>&nbsp;
+                <span id="warning-span" class="warning"></span>
+            </div>
+        </div>
+        <div id="mesh-div">
+        </div>
     </div>
-</div>
+    </div>
     <!-- Main -->
     <script src="./dist/bundle.js"></script>
 </body>

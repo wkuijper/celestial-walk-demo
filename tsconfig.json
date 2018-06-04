@@ -7,12 +7,6 @@
       "module": "commonjs",
       "target": "es6"
     },
-    "files": [
-      "src/index.ts"
-    ],
-    "exclude": [
-      "node_modules"
-    ],
-    "compileOnSave": false,
-    "buildOnSave": false
+    "compileOnSave": true,
+    "buildOnSave": true
 }

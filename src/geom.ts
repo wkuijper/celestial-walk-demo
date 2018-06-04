@@ -23,6 +23,10 @@ export type Vertex = { pos: Vec2, outgoing: HalfEdge }
 
 export type Face = { some: HalfEdge }
 
+export type MeshType = "Convex"|"Thin"|"Delaunay"
+
+export type WalkType = "Straight"|"Visibility"|"Celestial"
+
 export function mesh(): Mesh {
     let nw = { pos: { x: -402, y: +402 } } as Vertex
     let ne = { pos: { x: +402, y: +402 } } as Vertex
@@ -525,4 +529,175 @@ export function straightWalkStats(einit: HalfEdge, p1: Vec2, p2: Vec2): WalkStat
         }
     } while (e2 !== e)
     return {orient_tests: tests, path: path}
+}
+
+export function walkStats(walkType: WalkType, initEdge: HalfEdge, p1: Vec2, p2: Vec2): WalkStats {
+    if (walkType == "Celestial") {
+        return celestialWalkStats(initEdge, p2)
+    } else if (walkType == "Straight") {
+        return straightWalkStats(initEdge, p1, p2)
+    } 
+    // (walkType == "Visibility")
+    return visibilityWalkStats(initEdge, p2)
+}
+
+const html_preamble = `
+<html>
+  <head>
+    <title>`
+const html_2amble = `
+    </title>
+    <style>
+    html, body {
+        height: 95%;
+    }
+    #mesh-div {
+        height: 100%;
+        min-height: 100%;
+	    display: flex;
+        flex-direction: column;
+        padding: 20pt;
+    }
+    #mesh-svg {
+        display: flex;
+		flex-direction: column;
+        justify-content: center;
+        border:2px;
+        border-style: solid;
+    }
+    .mesh-line {
+        stroke-width:1;
+        stroke:rgb(200,200,200);
+    }
+    #arrow {
+        stroke-width:2;
+        stroke:rgb(0,0,200);
+    }
+    #arrow-head {
+        fill:rgb(0,0,200);
+    }
+    #arrow-origin {
+        fill:rgb(0,0,200);
+    }
+    .path-face {
+        fill:rgba(100, 200, 100,0.5);
+    }
+    .path-edge {
+        stroke-width:3;
+        stroke:rgba(150,0,200,0.5); 
+    }
+    </style>
+  </head>
+  <body>
+    <div id="mesh-div">`
+const html_postamble = `
+    </div>
+  </body>
+</html>`
+
+export function mesh2html(title: string, m: Mesh, walkStats?: WalkStats, line?: Line): string {
+    const lines: string[] = [html_preamble]
+    lines.push(title)
+    lines.push(html_2amble)
+    lines.push(mesh2svg(m, walkStats, line))
+    lines.push(html_postamble)
+    return lines.join("\n")
+}
+
+const svg_preamble = `
+<svg viewBox="-210 -210 420 420" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" version="1.1" id="mesh-svg">
+    <defs>
+        <marker id="arrow-head" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" class="arrowhead"/>
+        </marker>
+    </defs>
+    <g id="mesh-layer">`
+const svg_2amble = `
+    </g>
+    <g id="path-layer">`
+const svg_3amble = `
+    </g>
+    <g id="arrow-layer">`
+const svg_postamble = `
+    </g>
+</svg>`
+
+export function mesh2svg(m: Mesh, walkStats?: WalkStats, line?: Line): string {
+    const lines: string[] = [svg_preamble]
+    let edges = gatherEdges(m)
+    edges.forEach((e) => {
+        const p1 = e.half.origin.pos
+        const p2 = e.half.target.pos
+        lines.push('<line x1="' + p1.x + '" y1="' + p1.y + '" x2="' + p2.x + '" y2="' + p2.y + '" class="mesh-line"/>')
+    })
+    lines.push(svg_2amble)
+    if (walkStats) {
+        const path = walkStats.path
+        path.forEach((e) => {
+            const p1 = e.origin.pos
+            const p2 = e.target.pos
+            lines.push('<line x1="' + p1.x + '" y1="' + p1.y + '" x2="' + p2.x + '" y2="' + p2.y + '" class="path-edge"/>')
+            lines.push(face2svg(e.left))
+        })
+    }
+    lines.push(svg_3amble)
+    if (line) {
+        const p1 = line.p1
+        const p2 = line.p2
+        lines.push('<circle cx="' + p1.x + '" cy="' + p1.y + '" r="5" id="arrow-origin"/>')
+        if (p2 !== undefined) {
+            lines.push('<line x1="' + p1.x + '" y1="' + p1.y + '" x2="' + p2.x + '" y2="' + p2.y + '" id="arrow" marker-end="url(#arrow-head)"/>')
+        }
+    }
+    lines.push(svg_postamble)
+    return lines.join("\n")
+}
+
+export function face2svg(face: Face): string {
+    const p: Vec2 = face.some.origin.pos
+    const words: string[] = ['<path class="path-face" d="M ' + p.x + ' ' + p.y]
+    gatherFaceEdges(face).forEach((e: HalfEdge) => {
+        const p: Vec2 = e.target.pos
+        words.push(" L " + p.x + " " + p.y)
+    })
+    words.push('"/>')
+    return words.join("")
+}
+
+export function randomPoint(): Vec2 {
+    let x: number = Math.floor(Math.random() * 800) - 400;
+    let y: number = Math.floor(Math.random() * 800) - 400;
+    return { x: x, y: y }
+}
+
+export function randomPointCloud(n: number): Vec2[] {
+    const pointCloud: Vec2[] = []
+    for (var i = 0; i < n; i++) {
+        pointCloud.push(randomPoint())
+    }
+    return pointCloud
+}
+
+export function randomMesh(meshType: MeshType): Mesh {
+    return meshFromPointCloud(meshType, randomPointCloud(200))
+}
+
+export function meshFromPointCloud(meshType: MeshType, pointCloud: Vec2[]) {
+    let m = mesh()
+
+    triangulateMesh(m)
+
+    pointCloud.forEach((p: Vec2) => {
+        insertVertex(m, p)
+    })
+
+    if (meshType == "Delaunay") {
+        delaunafy(m)
+    } else if (meshType == "Convex") {
+        convexify(m)
+    } else if (meshType == "Thin") {
+        // Do nothing
+    }
+
+    return m
 }
