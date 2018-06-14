@@ -8,7 +8,7 @@ const arrowTypes: ArrowType[] = [0,45,90,135,180,225,270]
 
 const arrows: Map<ArrowType,Geom.Line> = new Map([])
 
-const arrowLength = 200
+const arrowLength = 40000
 
 arrowTypes.forEach((arrowType) => {
     const angle = (arrowType/180)*Math.PI
@@ -18,7 +18,7 @@ arrowTypes.forEach((arrowType) => {
     arrows.set(arrowType, {p1: { x: dx, y: dy}, p2: {x: -dx, y: -dy}})
 })
 
-const meshTypes: Geom.MeshType[] = ["Delaunay", "Thin", "Convex"];
+const meshTypes: Geom.MeshType[] = ["Delaunay", "Thin", "Convex", "Symmetric"];
 const walkTypes: Geom.WalkType[] = ["Straight", "Visibility", "Celestial"]
 
 if (!fs.existsSync("./benchmarks")) {
@@ -65,19 +65,7 @@ arrowTypes.forEach((arrowType) => {
     })
 })
 
-function computeNonDelaunayTriangles(path: Geom.HalfEdge[]): number {
-    let n = 0
-    path.forEach((e: Geom.HalfEdge) => {
-        if (e.next.next.next != e || !e.twin || e.twin.next.next.next != e.twin || 
-            Geom.incircle(e.twin.origin.pos, e.twin.target.pos, e.twin.next.target.pos, e.next.target.pos) || 
-            Geom.incircle(e.origin.pos, e.target.pos, e.next.target.pos, e.twin.next.target.pos)) {
-            n += 1
-        }
-    })
-    return n
-}
-
-for (var n = 0; n < 0x0040; n++) {
+for (var n = 0; n < 0x010; n++) {
     const hex: string = ("00" + n.toString(16)).substr(-3)
     const csv: string = fs.readFileSync("./benchmarks/input/" + hex + ".csv").toString()
     const pointCloud: Geom.Vec2[] = []
@@ -91,18 +79,24 @@ for (var n = 0; n < 0x0040; n++) {
         const p2 = arrowLine.p2
         meshTypes.forEach((meshType) => {
             const raw3 = raw2.get(meshType)!
-            const m = Geom.meshFromPointCloud(meshType, pointCloud)
+            const m = Geom.initialMesh(meshType)
+            const name1init = hex + "_init_" + meshType.toLowerCase()
+            fs.writeFileSync("./benchmarks/output/meshes/" + name1init + ".html", Geom.mesh2html(name1init, m, meshType == "Delaunay" || meshType == "Symmetric"))
+            Geom.fillMeshFromPointCloud(m, meshType, pointCloud)
             const name1 = hex + "_" + meshType.toLowerCase()
-            fs.writeFileSync("./benchmarks/output/meshes/" + name1 + ".html", Geom.mesh2html(name1, m))
-            const initEdge = Geom.walk(m.north, p1).some
+            fs.writeFileSync("./benchmarks/output/meshes/" + name1 + ".html", Geom.mesh2html(name1, m, meshType == "Delaunay" || meshType == "Symmetric"))
+            let initEdge = Geom.walk(m.north, p1).some
+            const r = Math.floor(Math.random() * 100);
+            for (let c = 0; c < r; c++) {
+                initEdge = initEdge.next
+            }
             walkTypes.forEach((walkType) => {
                 const raw4 = raw3.get(walkType)!
                 const stats = Geom.walkStats(walkType, initEdge, p1, p2)
                 const name2 = name1 + "_" + arrowType + "_" + walkType.toLowerCase()
-                fs.writeFileSync("./benchmarks/output/paths/" + name2 + ".html", Geom.mesh2html(name2, m, stats, arrowLine))
+                fs.writeFileSync("./benchmarks/output/paths/" + name2 + ".html", Geom.mesh2html(name2, m, false, stats, arrowLine))
                 raw4.get("orient_tests")!.push(stats.orient_tests)
                 raw4.get("link_dist")!.push(stats.path.length)
-                raw4.get("non_delaunay")!.push(computeNonDelaunayTriangles(stats.path))
             })
         })
     })
@@ -504,7 +498,7 @@ meshTypes.forEach((meshType) => {
         digest.forEach((digest2, arrowType) => {
             const digest4 = digest2.get(meshType)!.get(walkType)!
             digest4.forEach((quantStats, quantType) => {
-                if (quantType == "link_dist" || quantType == "orient_tests") {
+                if (quantType == "orient_tests") {
                     data.push(["", ""+arrowType, quantType, quantStats])
                 }
             })

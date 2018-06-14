@@ -52,11 +52,12 @@ describe('orientation', () => {
 
 describe('vector', () => {
 
-    it('addition/subtraction', () => {
+    it('addition/subtraction/multiplication', () => {
         const a: Geom.Vec2 = { x: 2, y: 3 }
         const b: Geom.Vec2 = { x: -3, y: 2 }
         expect(Geom.plus(a, b)).to.deep.equal({ x: -1, y: 5 })
         expect(Geom.minus(b, a)).to.deep.equal({ x: -5, y: -1 })
+        expect(Geom.mult(a, 2)).to.deep.equal({ x: 4, y: 6 })
     })
 
     it('left/right rotations', () => {
@@ -150,6 +151,55 @@ describe('mesh', () => {
             expect(n.prev.twin!.next.target.pos).to.equal(p)
         }
     });
+
+    it('boundary splitting (strain relief)', () => {
+        {
+            const m = Geom.mesh();
+            Geom.triangulateMesh(m)
+            const ne = m.north.origin.pos
+            const nw = m.north.target.pos        
+            const n = Geom.mult(Geom.plus(ne, nw), .5) // halfway on north edge
+            Geom.splitBoundaryEdgeInTriangularMesh(m, m.north, n)
+            expect(m.north.origin.pos).to.deep.equal(n)
+            expect(m.north.target.pos).to.deep.equal(nw)
+            expect(m.north.prev.twin!.prev.target.pos).to.deep.equal(n)
+            expect(m.north.prev.twin!.prev.origin.pos).to.deep.equal(ne)
+            expect(m.north.next.next.next).to.equal(m.north)
+            expect(m.north.prev.twin!.next.next.next).to.equal(m.north.prev.twin!)
+            expect(m.north.prev.twin!.prev.prev.prev).to.equal(m.north.prev.twin!)
+            expect(m.north.edge.half).to.equal(m.north)
+            expect(m.north.left.some.left).to.equal(m.north.left)
+        }
+        {
+            const m = Geom.mesh();
+            const ne = m.north.origin.pos
+            const nw = m.north.target.pos        
+            const n = Geom.mult(Geom.plus(ne, nw), .5) // halfway on north edge
+            Geom.splitBoundaryEdgeInConvexMesh(m, m.north, n)
+            expect(m.north.origin.pos).to.deep.equal(n)
+            expect(m.north.target.pos).to.deep.equal(nw)
+            expect(m.north.prev.target.pos).to.deep.equal(n)
+            expect(m.north.prev.origin.pos).to.deep.equal(ne)
+            expect(m.north.next.next.next.next.next).to.equal(m.north)
+            expect(m.north.prev.prev.prev.prev.prev).to.equal(m.north)
+            expect(m.north.edge.half).to.equal(m.north)
+            expect(m.north.left.some.left).to.equal(m.north.left)
+        }
+        {
+            const m = Geom.mesh(1);
+            expect(m.north.next.next.next.next).to.not.equal(m.north)
+            expect(m.north.next.next.next.next.next.next.next.next).to.equal(m.north)
+            expect(m.north.prev.prev.prev.prev.prev.prev.prev.prev).to.equal(m.north)
+            expect(m.north.edge.half).to.equal(m.north)
+            expect(m.north.left.some.left).to.equal(m.north.left)
+        }{
+            const m = Geom.mesh(1);
+            Geom.triangulateMesh(m);
+        }{
+            const m = Geom.mesh(2);
+            Geom.triangulateMesh(m);
+        }
+    })
 
     it('obtuseness', () => {
         const p1 = { x: 44, y: -147 }

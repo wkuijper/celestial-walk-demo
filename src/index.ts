@@ -21,7 +21,7 @@ function selectMesh(meshType: Geom.MeshType) {
     document.getElementById("warning-span")!.innerHTML = ''
     document.getElementById("select-mesh")!.classList.remove("warning")
     document.getElementById("select-walk")!.classList.remove("warning")
-    if (currWalkType == "Visibility" && (meshType == "Thin" || meshType == "Convex")) {
+    if (currWalkType == "Visibility" && (meshType != "Delaunay")) {
         document.getElementById("warning-span")!.innerHTML = 'May loop!'
         document.getElementById("select-walk")!.classList.add("warning")
     }
@@ -135,7 +135,7 @@ function selectWalk(walkType: Geom.WalkType) {
     document.getElementById("warning-span")!.innerHTML = ''
     document.getElementById("select-mesh")!.classList.remove("warning")
     document.getElementById("select-walk")!.classList.remove("warning")
-    if (walkType == "Visibility" && (currMeshType == "Thin" || currMeshType == "Convex")) {
+    if (walkType == "Visibility" && (currMeshType != "Delaunay")) {
         document.getElementById("warning-span")!.innerHTML = 'May loop!'
         document.getElementById("select-mesh")!.classList.add("warning")
     }
