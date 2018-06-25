@@ -413,7 +413,7 @@ int main()
     int TRINAGULATIONS = 10;
 
     // Every time the walking direction changes by step degrees.
-    int step = 90;
+    int step = 45;
     // There is a vector of stats for each angle.
     vector<vector<int>> stats(360 / step, vector<int>());
 
