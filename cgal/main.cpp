@@ -104,52 +104,6 @@ class WalkLog
 
     void setup(const DelaunayTriangulation &T)
     {
-        // f
-        //     << "<line x1=\"" << -D << "\" y1=\"" << -D << "\" x2=\"" << D << "\" y2=\"" << -D << "\" class=\"mesh-line\" />" << endl
-        //     << "<line x1=\"" << D << "\" y1=\"" << -D << "\" x2=\"" << D << "\" y2=\"" << D << "\" class=\"mesh-line\" />" << endl
-        //     << "<line x1=\"" << D << "\" y1=\"" << D << "\" x2=\"" << -D << "\" y2=\"" << D << "\" class=\"mesh-line\" />" << endl
-        //     << "<line x1=\"" << -D << "\" y1=\"" << D << "\" x2=\"" << -D << "\" y2=\"" << -D << "\" class=\"mesh-line\" />";
-
-        // // Compute corner closest to a given point.
-        // auto corner = [](const Point &p) {
-        //     typedef pair<double, double> pdd;
-        //     auto x = p.x(),
-        //          y = p.y();
-
-        //     auto corner = pdd(-D, -D);
-        //     auto min_dist = (x - (-D)) * (x - (-D)) + (y - (-D)) * (y - (-D));
-
-        //     pdd corners[3] = {pdd(-D, D), pdd(D, -D), pdd(D, D)};
-
-        //     for (const auto &c : corners)
-        //     {
-        //         auto dist = (x - c.first) * (x - c.first) + (y - c.second) * (y - c.second);
-        //         if (dist < min_dist)
-        //         {
-        //             min_dist = dist;
-        //             corner = c;
-        //         }
-        //     }
-        //     return corner;
-        // };
-
-        // // Vertexes on the boundary are connected to the infinite vertex.
-        // // Represent this connection by connecting the boundary vertices with
-        // // the closest corner vertexes.
-        // Vertex_circulator
-        //     vc = T.incident_vertices(T.infinite_vertex()),
-        //     done(vc);
-
-        // do
-        // {
-        //     auto c = corner(vc->point());
-
-        //     f
-        //         << "<line x1=\"" << c.first << "\" y1=\"" << c.second << "\""
-        //         << " x2=\"" << vc->point().x() << "\" y2=\"" << vc->point().y() << "\""
-        //         << " class=\"mesh-line\" />" << endl;
-        // } while (++vc != done);
-
         for (auto edge = T.edges_begin(); edge != T.edges_end(); ++edge)
         {
             /*
@@ -286,7 +240,6 @@ class Rim
     {
         auto v = e.first->cw(e.second);
         return e.first->vertex(v)->point();
-        //return T.segment(e).target();
     }
 
     const Face &face() const
