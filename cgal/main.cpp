@@ -330,6 +330,7 @@ int celestial_walk(
     if (++tests && strictlyRightOf(rim.origin(), rim.target(), target))
     {
         // Log the face we will leave.
+
         walk_log.log(rim.face());
 
         // Twin is assumed to exist.
@@ -346,6 +347,7 @@ int celestial_walk(
     while (rim != rim2 && n < 10000)
     {
         n++;
+
         walk_log.flush();
 
         if (++tests && strictlyRightOf(rim2.origin(), rim2.target(), target))
@@ -403,15 +405,20 @@ int main()
     string c("mkdir -p " + LOG_FOLDER + " && rm -rf ./" + LOG_FOLDER + "/*");
     system(c.c_str());
 
+    // Describe extrem point of the surface to triangulate.
+    vector<Point> extrema{Point(-D, -D), Point(-D, D), Point(D, -D), Point(D, D)};
+
+    // Number of points in trinagulation.
     int POINTS = 1000;
     int TRINAGULATIONS = 10;
 
-    vector<Point> extrema{Point(-D, -D), Point(-D, D), Point(D, -D), Point(D, D)};
-    Point origin(0.0, 0.0);
-
+    // Every time the walking direction changes by step degrees.
     int step = 90;
     // There is a vector of stats for each angle.
     vector<vector<int>> stats(360 / step, vector<int>());
+
+    // Always walk from the origin.
+    Point origin(0.0, 0.0);
 
     int t = 0;
     while (t < TRINAGULATIONS)
@@ -428,15 +435,18 @@ int main()
         // Iterate over compass directions.
         for (int angle = 0; angle < 360; angle += step)
         {
+            // Setup the logger.
             WalkLog walk_log(LOG_FOLDER + "/triangulation_t(" + to_string(t) + ")_angle(" + to_string(angle) + ").html");
+
+            walk_log.setup(DT);
+            // Mark a reference point.
+            walk_log.log(Point(D, D), "green");
+            walk_log.flush();
+            // Logger setup is finished.
 
             // Fix direction.
             double r = 0.8 * D;
             Point target(r * cos(PI * angle / 180.), r * sin(PI * angle / 180.));
-
-            walk_log.setup(DT);
-            walk_log.log(Point(D, D), "green");
-            walk_log.flush();
 
             // Perform the walk.
             int tests = celestial_walk(origin, target, DT, walk_log);
