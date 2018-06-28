@@ -2,6 +2,9 @@ import * as Geom from './geom';
 import { expect } from 'chai';
 import 'mocha';
 
+import * as fs from 'fs';
+import { stat } from 'fs/promises';
+
 describe('orientation', () => {
 
     it('function', () => {
@@ -129,6 +132,13 @@ describe('mesh', () => {
         expect(n.prev.twin!.left).to.equal(ff)
     });
 
+    it('connected', () => {
+        const m = Geom.mesh();
+        let n: Geom.HalfEdge = m.north
+        expect(Geom.connected(m.north.origin, m.north.target)).to.equal(m.north.edge)
+        expect(Geom.connected(m.north.target, m.north.origin)).to.equal(m.north.edge)
+    })
+
     it('insertion', () => {
         {
             const m = Geom.mesh();
@@ -152,12 +162,12 @@ describe('mesh', () => {
         }
     });
 
-    it('boundary splitting (strain relief)', () => {
+    it('boundary splitting', () => {
         {
             const m = Geom.mesh();
             Geom.triangulateMesh(m)
             const ne = m.north.origin.pos
-            const nw = m.north.target.pos        
+            const nw = m.north.target.pos
             const n = Geom.mult(Geom.plus(ne, nw), .5) // halfway on north edge
             Geom.splitBoundaryEdgeInTriangularMesh(m, m.north, n)
             expect(m.north.origin.pos).to.deep.equal(n)
@@ -173,7 +183,7 @@ describe('mesh', () => {
         {
             const m = Geom.mesh();
             const ne = m.north.origin.pos
-            const nw = m.north.target.pos        
+            const nw = m.north.target.pos
             const n = Geom.mult(Geom.plus(ne, nw), .5) // halfway on north edge
             Geom.splitBoundaryEdgeInConvexMesh(m, m.north, n)
             expect(m.north.origin.pos).to.deep.equal(n)
@@ -192,14 +202,159 @@ describe('mesh', () => {
             expect(m.north.prev.prev.prev.prev.prev.prev.prev.prev).to.equal(m.north)
             expect(m.north.edge.half).to.equal(m.north)
             expect(m.north.left.some.left).to.equal(m.north.left)
-        }{
+        } {
             const m = Geom.mesh(1);
             Geom.triangulateMesh(m);
-        }{
+        } {
             const m = Geom.mesh(2);
             Geom.triangulateMesh(m);
         }
-    })
+    });
+
+    it('constraining', () => {
+        {
+            const m = Geom.mesh();
+            Geom.triangulateMesh(m)
+            const points: Geom.Vec2[] = [
+                { x: -150, y: 150 },
+                { x: 150, y: -150 }
+            ]
+            const vertices: Geom.Vertex[] = []
+            points.forEach((p) => {
+                vertices.push(Geom.insertVertex(m, p))
+            })
+            const start = vertices[0]
+            const finish = vertices[1]
+            const connectingEdge: Geom.HalfEdge = Geom.flipToConnectVertices(start, finish)
+            expect(connectingEdge.origin).to.equal(start)
+            expect(connectingEdge.target).to.equal(finish)
+        }
+        {
+            const m = Geom.mesh();
+            Geom.triangulateMesh(m)
+            const points: Geom.Vec2[] = [
+                { x: 150, y: 150 },
+                { x: -150, y: -150 }
+            ]
+            const vertices: Geom.Vertex[] = []
+            points.forEach((p) => {
+                vertices.push(Geom.insertVertex(m, p))
+            })
+            const start = vertices[0]
+            const finish = vertices[1]
+            const connectingEdge: Geom.HalfEdge = Geom.flipToConnectVertices(start, finish)
+            expect(connectingEdge.origin).to.equal(start)
+            expect(connectingEdge.target).to.equal(finish)
+        }
+        {
+            const m = Geom.mesh();
+            Geom.triangulateMesh(m)
+            const points: Geom.Vec2[] = [
+                { x: -15000, y: 15000 },
+                { x: 15000, y: -15000 },
+                { x: -5000, y: 2500 },
+                { x: 5000, y: -2500 }
+            ]
+            const vertices: Geom.Vertex[] = []
+            points.forEach((p) => {
+                vertices.push(Geom.insertVertex(m, p))
+            })
+            const start = vertices[0]
+            const finish = vertices[1]
+            const connectingEdge: Geom.HalfEdge = Geom.flipToConnectVertices(start, finish)
+            expect(connectingEdge.origin).to.equal(start)
+            expect(connectingEdge.target).to.equal(finish)
+        }
+        {
+            const m = Geom.mesh();
+            Geom.triangulateMesh(m)
+            const points: Geom.Vec2[] = [
+                { x: -15000, y: 15000 },
+                { x: 15000, y: -15000 },
+                { x: -5000, y: 2500 },
+                { x: 5000, y: -2500 },
+                { x: -8754, y: 7898 },
+                { x: 3678, y: 2588 },
+                { x: -543, y: 6238 },
+                { x: 324, y: 376 },
+                { x: -8990, y: -3784 },
+                { x: 2653, y: 2599 },
+                { x: -1230, y: -2178 },
+                { x: 2654, y: -7632 },
+                { x: 6533, y: -3653 },
+                { x: -60, y: 243 },
+            ]
+            const vertices: Geom.Vertex[] = []
+            points.forEach((p) => {
+                vertices.push(Geom.insertVertex(m, p))
+            })
+            const start = vertices[0]
+            const finish = vertices[1]
+                const connectingEdge: Geom.HalfEdge = Geom.flipToConnectVertices(start, finish)
+                expect(connectingEdge.origin).to.equal(start)
+                expect(connectingEdge.target).to.equal(finish)
+        }
+        {
+            const m = Geom.mesh();
+            Geom.triangulateMesh(m)
+            const points: Geom.Vec2[] = [
+                { x: -15000, y: 15000 },
+                { x: 15000, y: -15000 },
+                { x: -5000, y: 2500 },
+                { x: 5000, y: -2500 },
+                { x: -8754, y: 7898 },
+                { x: 3678, y: 2588 },
+                { x: -543, y: 6238 },
+                { x: 324, y: 376 },
+                { x: -8990, y: -3784 },
+                { x: 2653, y: 2599 },
+                { x: -1230, y: -2178 },
+                { x: 2654, y: -7632 },
+                { x: 6533, y: -3653 },
+                { x: -60, y: 243 },
+            ]
+            const vertices: Geom.Vertex[] = []
+            points.forEach((p) => {
+                vertices.push(Geom.insertVertex(m, p))
+            })
+            Geom.delaunafy(m)
+            const start = vertices[0]
+            const finish = vertices[1]
+                const connectingEdge: Geom.HalfEdge = Geom.flipToConnectVertices(start, finish)
+                expect(connectingEdge.origin).to.equal(start)
+                expect(connectingEdge.target).to.equal(finish)
+        }
+    });
+
+    it('drawing', () => {
+        {
+            const m = Geom.mesh();
+            Geom.triangulateMesh(m)
+            Geom.draw(m, { p1: { x: -10000, y: -10000 }, p2: { x: -10000, y: 10000}}, false, true)
+            Geom.draw(m, { p1: { x: -10000, y: 10000 }, p2: { x: 10000, y: 10000}}, false, true)
+            Geom.draw(m, { p1: { x: 10000, y: 10000 }, p2: { x: 10000, y: -10000}}, false, true)
+            Geom.draw(m, { p1: { x: 10000, y: -10000 }, p2: { x: -10000, y: -10000}}, false, true)
+            Geom.draw(m, { p1: { x: -15000, y: -15000 }, p2: { x: -15000, y: 5000}}, false, true)
+            Geom.draw(m, { p1: { x: -15000, y: 5000 }, p2: { x: 5000, y: 5000}}, false, true)
+            Geom.draw(m, { p1: { x: 5000, y: 5000 }, p2: { x: 5000, y: -15000}}, false, true)
+            Geom.draw(m, { p1: { x: 5000, y: -15000 }, p2: { x: -15000, y: -15000}}, false, true)
+
+            Geom.draw(m, { p1: { x: -15000, y: 5000 }, p2: { x: 5000, y: -15000}}, false, false)
+            Geom.draw(m, { p1: { x: -10000, y: 10000 }, p2: { x: 10000, y: -10000}}, false, false)
+
+            for (let h = -20000; h <= 15000; h += 1000) {
+                for (let v = -20000; v <= 15000; v += 1000) {
+                    Geom.insertVertex(m, {x: h + Math.round(Math.random() * 500), y: v + Math.round(Math.random() * 500)})
+                }
+            }
+            //Geom.delaunafy(m)
+            Geom.floodFill(m)
+            Geom.convexify(m)
+
+            // TOOD: add conditions
+            fs.writeFileSync("/tmp/drawn.html", Geom.mesh2html("drawn", m, undefined, undefined, undefined, true))
+        }
+    });
 
     it('obtuseness', () => {
         const p1 = { x: 44, y: -147 }

@@ -18,11 +18,11 @@ function selectMesh(meshType: Geom.MeshType) {
         return
     }
 
-    document.getElementById("warning-span")!.innerHTML = ''
+    document.getElementById("status-div")!.innerHTML = ''
     document.getElementById("select-mesh")!.classList.remove("warning")
     document.getElementById("select-walk")!.classList.remove("warning")
     if (currWalkType == "Visibility" && (meshType != "Delaunay")) {
-        document.getElementById("warning-span")!.innerHTML = 'May loop!'
+        document.getElementById("status-div")!.innerHTML = '<span class="warning">This combination may loop!</span>'
         document.getElementById("select-walk")!.classList.add("warning")
     }
 
@@ -88,9 +88,10 @@ function drawPath() {
     if (!pathLayer) {
         return
     }
+    let statusLine = ""
     let lines: string[] = []
     if (currPathInitFace !== null) {
-        lines.push(Geom.face2svg(currPathInitFace))
+        lines.push(Geom.face2svg(currPathInitFace, "path-face"))
     }
     if (currWalkStats !== null) {
         const currPath = currWalkStats.path
@@ -99,13 +100,13 @@ function drawPath() {
                 const p1 = e.origin.pos
                 const p2 = e.target.pos
                 lines.push('<line x1="' + p1.x + '" y1="' + p1.y + '" x2="' + p2.x + '" y2="' + p2.y + '" class="path-edge"/>')
-                lines.push(Geom.face2svg(e.left))
+                lines.push(Geom.face2svg(e.left, "path-face"))
             }
         })
-        const currOrientTests = currWalkStats.orient_tests
-        lines.push('<text x="-180" y="-180" class="path-stats-text">faces: ' + currPath.length + ', orientation tests: ' + currOrientTests + "</text>")
+        statusLine = `Faces:&nbsp;<span class="facecount">${currPath.length}</span>, Orientation Tests:&nbsp;<span class="orientcount">${currWalkStats.orient_tests}</span>`
     }
     pathLayer.innerHTML = lines.join("\n")
+    document.getElementById("status-div")!.innerHTML = statusLine
 }
 
 function drawArrow() {
@@ -132,11 +133,11 @@ function selectWalk(walkType: Geom.WalkType) {
     if (currWalkType && walkType == currWalkType) {
         return
     }
-    document.getElementById("warning-span")!.innerHTML = ''
+    document.getElementById("status-div")!.innerHTML = ''
     document.getElementById("select-mesh")!.classList.remove("warning")
     document.getElementById("select-walk")!.classList.remove("warning")
     if (walkType == "Visibility" && (currMeshType != "Delaunay")) {
-        document.getElementById("warning-span")!.innerHTML = 'May loop!'
+        document.getElementById("status-div")!.innerHTML = '<span class="warning">This combination may loop!</span>'
         document.getElementById("select-mesh")!.classList.add("warning")
     }
     currWalkType = <Geom.WalkType>walkType

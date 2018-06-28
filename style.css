@@ -21,6 +21,18 @@ html, body {
     background: lightgray;
     padding-top: 5px;
     padding-bottom: 10px;
+    min-height: 30px;
+}
+
+#status-div {
+    display: flex;
+    flex-direction: row;
+    justify-content: left;
+    background: lightgray;
+    padding-top: 5px;
+    padding-left: 10px;
+    padding-bottom: 10px;
+    min-height: 25px;
 }
 
 .menu-item {
@@ -54,12 +66,12 @@ select {
 }
 
 .mesh-line {
-    stroke-width:1;
+    stroke-width:100;
     stroke:rgb(200,200,200);
 }
 
 #arrow {
-    stroke-width:2;
+    stroke-width:200;
     stroke:rgb(0,0,200);
 }
 
@@ -76,7 +88,7 @@ select {
 }
 
 .path-edge {
-    stroke-width:3;
+    stroke-width:300;
     stroke:rgba(150,0,200,0.5); 
 }
 
@@ -88,4 +100,12 @@ select {
 
 .warning {
     color: rgb(200,80,80);
+}
+
+.facecount {
+    color: rgba(80, 160, 80);
+}
+
+.orientcount {
+    color: rgba(150,0,200); 
 }

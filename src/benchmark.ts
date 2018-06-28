@@ -2,6 +2,7 @@ import * as Geom from './geom';
 import * as fs from 'fs';
 import { stat } from 'fs/promises';
 
+
 type ArrowType = 0|45|90|135|180|225|270
 
 const arrowTypes: ArrowType[] = [0,45,90,135,180,225,270]
@@ -18,7 +19,7 @@ arrowTypes.forEach((arrowType) => {
     arrows.set(arrowType, {p1: { x: dx, y: dy}, p2: {x: -dx, y: -dy}})
 })
 
-const meshTypes: Geom.MeshType[] = ["Delaunay", "Thin", "Convex", "Symmetric"];
+const meshTypes: Geom.MeshType[] = ["Delaunay", "Thin", "Convex"];
 const walkTypes: Geom.WalkType[] = ["Straight", "Visibility", "Celestial"]
 
 if (!fs.existsSync("./benchmarks")) {
@@ -85,11 +86,7 @@ for (var n = 0; n < 0x010; n++) {
             Geom.fillMeshFromPointCloud(m, meshType, pointCloud)
             const name1 = hex + "_" + meshType.toLowerCase()
             fs.writeFileSync("./benchmarks/output/meshes/" + name1 + ".html", Geom.mesh2html(name1, m, meshType == "Delaunay" || meshType == "Symmetric"))
-            let initEdge = Geom.walk(m.north, p1).some
-            const r = Math.floor(Math.random() * 100);
-            for (let c = 0; c < r; c++) {
-                initEdge = initEdge.next
-            }
+            const initEdge = Geom.walk(m.north, p1).some
             walkTypes.forEach((walkType) => {
                 const raw4 = raw3.get(walkType)!
                 const stats = Geom.walkStats(walkType, initEdge, p1, p2)
