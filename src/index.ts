@@ -6,15 +6,48 @@ import * as Walk from './walk'
 import * as Render from './render'
 import * as Random from 'random-js'
 
-type MeshType = "Delaunay Pointcloud"|"Thintriangles Pointcloud"|"Convex Pointcloud"|"Delaunayish Floorplan"|"Convex Floorplan"|"Subdivided Floorplan"
-const meshTypes: MeshType[] = ["Delaunay Pointcloud", "Thintriangles Pointcloud", "Convex Pointcloud", "Delaunayish Floorplan", "Convex Floorplan", "Subdivided Floorplan"]
+type MeshType = "Delaunay Pointcloud"|"Thintriangles Pointcloud"|"Convex Pointcloud"|"Delaunayish Floorplan"|"Convex Floorplan"|"Subdivided Floorplan"|"Visibility Looper"
+const meshTypes: MeshType[] = ["Delaunay Pointcloud", "Thintriangles Pointcloud", "Convex Pointcloud", "Delaunayish Floorplan", "Convex Floorplan", "Subdivided Floorplan", "Visibility Looper"]
 
 type WalkType = "Straight"|"Visibility"|"Celestial"
 const walkTypes: WalkType[] = ["Straight", "Visibility", "Celestial"]
 
 const random = new Random(Random.engines.nativeMath)
 
-function randomMesh(meshType: MeshType): Geom.Mesh {
+function generateVisibilityLooper(): Geom.Mesh {
+    const mesh = Geom.mesh()
+    function drawCenteredRotatedSquare(width: number, rotation: number, fill: boolean): Geom.Vertex[] {
+        const h = width/2
+        const points = [{ x: -h, y: -h }, { x: h, y: -h }, { x: h, y: h }, { x: -h, y: h }]
+        points.forEach((p) => {
+            p.x = p.x * Math.cos(rotation) - p.y * Math.sin(rotation)
+            p.y = p.x * Math.sin(rotation) + p.y * Math.cos(rotation)
+        })
+        const vertices = points.map((p) => { return Geom.insertVertex(mesh, p) })
+        let v1 = vertices[vertices.length-1]
+        vertices.forEach((v2) => {
+            Geom.drawBetweenVertices(v1, v2, fill, false)
+            v1 = v2
+        })
+        return vertices
+    }
+    const vs1 = drawCenteredRotatedSquare(20000, 0, false)
+    const vs2 = drawCenteredRotatedSquare(10000, (-5/180)*Math.PI, true)
+    Geom.drawBetweenVertices(vs1[0], vs2[0], false, false)
+    Geom.drawBetweenVertices(vs1[1], vs2[0], false, false)
+    Geom.drawBetweenVertices(vs1[1], vs2[1], false, false)
+    Geom.drawBetweenVertices(vs1[2], vs2[1], false, false)
+    Geom.drawBetweenVertices(vs1[2], vs2[2], false, false)
+    Geom.drawBetweenVertices(vs1[3], vs2[2], false, false)
+    Geom.drawBetweenVertices(vs1[3], vs2[3], false, false)
+    Geom.drawBetweenVertices(vs1[0], vs2[3], false, false)
+    Geom.drawBetweenVertices(vs2[1], vs2[3], false, false)
+    Geom.floodFill(mesh)
+    //Geom.drawBetweenVertices(vs1[0], vs2[0], false, false)
+    return mesh
+}
+
+function generateMesh(meshType: MeshType): Geom.Mesh {
     if (meshType == "Delaunay Pointcloud") {
         return Pointcloud.randomMesh(random, "Delaunay")
     } else if (meshType == "Thintriangles Pointcloud") {
@@ -27,6 +60,8 @@ function randomMesh(meshType: MeshType): Geom.Mesh {
         return Floorplan.randomMesh(random, false, true)
     } else if (meshType == "Subdivided Floorplan") {
         return Floorplan.randomMesh(random, true, false)
+    } else if (meshType == "Visibility Looper") {
+        return generateVisibilityLooper()
     }
     return treatedAll(meshType)
 }
@@ -58,7 +93,7 @@ function selectMesh(meshType: MeshType) {
     }
 
     currMeshType = <MeshType>meshType
-    currMesh = randomMesh(currMeshType)
+    currMesh = generateMesh(currMeshType)
     let meshDIV = document.getElementById("mesh-div")!
     meshDIV.innerHTML = Render.mesh2svg(currMesh)
 

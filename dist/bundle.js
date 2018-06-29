@@ -886,10 +886,42 @@ const Floorplan = __webpack_require__(4);
 const Walk = __webpack_require__(5);
 const Render = __webpack_require__(6);
 const Random = __webpack_require__(7);
-const meshTypes = ["Delaunay Pointcloud", "Thintriangles Pointcloud", "Convex Pointcloud", "Delaunayish Floorplan", "Convex Floorplan", "Subdivided Floorplan"];
+const meshTypes = ["Delaunay Pointcloud", "Thintriangles Pointcloud", "Convex Pointcloud", "Delaunayish Floorplan", "Convex Floorplan", "Subdivided Floorplan", "Visibility Looper"];
 const walkTypes = ["Straight", "Visibility", "Celestial"];
 const random = new Random(Random.engines.nativeMath);
-function randomMesh(meshType) {
+function generateVisibilityLooper() {
+    const mesh = Geom.mesh();
+    function drawCenteredRotatedSquare(width, rotation, fill) {
+        const h = width / 2;
+        const points = [{ x: -h, y: -h }, { x: h, y: -h }, { x: h, y: h }, { x: -h, y: h }];
+        points.forEach((p) => {
+            p.x = p.x * Math.cos(rotation) - p.y * Math.sin(rotation);
+            p.y = p.x * Math.sin(rotation) + p.y * Math.cos(rotation);
+        });
+        const vertices = points.map((p) => { return Geom.insertVertex(mesh, p); });
+        let v1 = vertices[vertices.length - 1];
+        vertices.forEach((v2) => {
+            Geom.drawBetweenVertices(v1, v2, fill, false);
+            v1 = v2;
+        });
+        return vertices;
+    }
+    const vs1 = drawCenteredRotatedSquare(20000, 0, false);
+    const vs2 = drawCenteredRotatedSquare(10000, (-5 / 180) * Math.PI, true);
+    Geom.drawBetweenVertices(vs1[0], vs2[0], false, false);
+    Geom.drawBetweenVertices(vs1[1], vs2[0], false, false);
+    Geom.drawBetweenVertices(vs1[1], vs2[1], false, false);
+    Geom.drawBetweenVertices(vs1[2], vs2[1], false, false);
+    Geom.drawBetweenVertices(vs1[2], vs2[2], false, false);
+    Geom.drawBetweenVertices(vs1[3], vs2[2], false, false);
+    Geom.drawBetweenVertices(vs1[3], vs2[3], false, false);
+    Geom.drawBetweenVertices(vs1[0], vs2[3], false, false);
+    Geom.drawBetweenVertices(vs2[1], vs2[3], false, false);
+    Geom.floodFill(mesh);
+    //Geom.drawBetweenVertices(vs1[0], vs2[0], false, false)
+    return mesh;
+}
+function generateMesh(meshType) {
     if (meshType == "Delaunay Pointcloud") {
         return Pointcloud.randomMesh(random, "Delaunay");
     }
@@ -907,6 +939,9 @@ function randomMesh(meshType) {
     }
     else if (meshType == "Subdivided Floorplan") {
         return Floorplan.randomMesh(random, true, false);
+    }
+    else if (meshType == "Visibility Looper") {
+        return generateVisibilityLooper();
     }
     return common_1.treatedAll(meshType);
 }
@@ -932,7 +967,7 @@ function selectMesh(meshType) {
         document.getElementById("select-walk").classList.add("warning");
     }
     currMeshType = meshType;
-    currMesh = randomMesh(currMeshType);
+    currMesh = generateMesh(currMeshType);
     let meshDIV = document.getElementById("mesh-div");
     meshDIV.innerHTML = Render.mesh2svg(currMesh);
     meshSVG = document.getElementById("mesh-svg");
