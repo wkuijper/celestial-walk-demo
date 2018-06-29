@@ -70,15 +70,15 @@
 "use strict";
 
 Object.defineProperty(exports, "__esModule", { value: true });
-const Random = __webpack_require__(1);
-const floorplan_1 = __webpack_require__(3);
-const mersenne = Random.engines.mt19937();
-mersenne.seed(1111);
-function mesh(boundarySplits = 0) {
-    let nw = { pos: { x: -65536, y: +65536 } };
-    let ne = { pos: { x: +65536, y: +65536 } };
-    let se = { pos: { x: +65536, y: -65536 } };
-    let sw = { pos: { x: -65536, y: -65536 } };
+//1035
+exports.MIN_MESH_COORD = -65535;
+exports.MAX_MESH_COORD = 65535;
+exports.MESH_SIZE = exports.MAX_MESH_COORD - exports.MIN_MESH_COORD;
+function mesh() {
+    let nw = { pos: { x: exports.MIN_MESH_COORD - 1, y: exports.MAX_MESH_COORD + 1 } };
+    let ne = { pos: { x: exports.MAX_MESH_COORD + 1, y: exports.MAX_MESH_COORD + 1 } };
+    let se = { pos: { x: exports.MAX_MESH_COORD + 1, y: exports.MIN_MESH_COORD - 1 } };
+    let sw = { pos: { x: exports.MIN_MESH_COORD - 1, y: exports.MIN_MESH_COORD - 1 } };
     let n = { obtuse: false, origin: ne, target: nw, fill: false };
     let e = { obtuse: false, origin: se, target: ne, fill: false };
     let s = { obtuse: false, origin: sw, target: se, fill: false };
@@ -109,22 +109,6 @@ function mesh(boundarySplits = 0) {
     s.left = f;
     w.left = f;
     let m = { north: n };
-    function splitBoundary(boundary) {
-        let nextBoundary = [];
-        boundary.forEach((e) => {
-            const sum = plus(e.origin.pos, e.target.pos);
-            if ((sum.x % 2) != 0 || (sum.y % 2) != 0) {
-                throw { geom: true, message: "splitting boundary produces non-integer coordinate" };
-            }
-            const p = { x: sum.x >> 1, y: sum.y >> 1 };
-            splitBoundaryEdgeInConvexMesh(m, e, p).forEach((e) => { nextBoundary.push(e); });
-        });
-        return nextBoundary;
-    }
-    let boundary = [n, e, s, w];
-    for (let c = 0; c < boundarySplits; c++) {
-        boundary = splitBoundary(boundary);
-    }
     return m;
 }
 exports.mesh = mesh;
@@ -195,11 +179,6 @@ function roundVec2(p) {
     return { x: Math.round(p.x), y: Math.round(p.y) };
 }
 exports.roundVec2 = roundVec2;
-function approxBisectorNext(e2) {
-    let e3 = e2.next;
-    return lineByPointAndDir(e2.target.pos, rotateRight(minus(e3.target.pos, e2.origin.pos)));
-}
-exports.approxBisectorNext = approxBisectorNext;
 function computeObtuseness(e2) {
     let e3 = e2.next;
     return strictlyRightOf(lineByPointAndDir(e2.target.pos, rotateLeft(minus(e2.target.pos, e2.origin.pos))), e3.target.pos);
@@ -488,6 +467,11 @@ function walkToClosestVertex(einit, p) {
     return clv;
 }
 exports.walkToClosestVertex = walkToClosestVertex;
+function approxBisectorNext(e2) {
+    let e3 = e2.next;
+    return lineByPointAndDir(e2.target.pos, rotateRight(minus(e3.target.pos, e2.origin.pos)));
+}
+exports.approxBisectorNext = approxBisectorNext;
 function walk(einit, p) {
     let e = einit;
     if (strictlyRightOf(line(e), p)) {
@@ -571,23 +555,10 @@ function delaunafy(m) {
     }
 }
 exports.delaunafy = delaunafy;
-function shuffle(array) {
-    let m = array.length, t, i;
-    while (m) {
-        m -= 1;
-        i = Random.integer(0, m)(mersenne);
-        t = array[m];
-        array[m] = array[i];
-        array[i] = t;
-    }
-    return array;
-}
-exports.shuffle = shuffle;
 function convexify(m, deeply = false) {
     // pre: m must be triangular
     // post: m will (almost certainly?) no longer be triangular but still convex
     delaunafy(m);
-    // shallow convexification: eliminate triangles based on local criterion
     let triangles = gatherFaces(m);
     let waiting = [];
     let deleted = (e) => {
@@ -603,7 +574,6 @@ function convexify(m, deeply = false) {
         return false;
     };
     triangles.forEach((f) => { waiting.push(f); });
-    //shuffle(waiting)
     while (waiting.length > 0) {
         let e = waiting.pop().some;
         if (!triangles.has(e.left)) {
@@ -619,496 +589,8 @@ function convexify(m, deeply = false) {
             continue;
         }
     }
-    // deeper convexification: eliminate edges based on global criterion
-    // this operation is potentially very expensive, it is only to be used on sparse meshes
-    if (!deeply) {
-        return;
-    }
-    function canEliminate(ee) {
-        const estart = ee.half.prev;
-        let e = estart;
-        do {
-            let enext = e.next;
-            if (enext.edge == ee) {
-                enext = enext.twin.next;
-            }
-            if (!leftOrOnTopOf(line(e), enext.target.pos)) {
-                return false;
-            }
-            e = enext;
-        } while (e != estart);
-        return true;
-    }
-    let edges = gatherEdges(m);
-    edges.forEach((ee) => {
-        if (!ee.constrained && ee.half.twin && canEliminate(ee)) {
-            deleteEdge(ee.half);
-        }
-    });
 }
 exports.convexify = convexify;
-function celestialWalkStats(einit, p) {
-    let tests = 0;
-    let e = einit;
-    let path = [e];
-    if (++tests && strictlyRightOf(line(e), p)) {
-        if (!e.twin) {
-            throw { geom: true, message: "out of bounds" };
-        }
-        e = e.twin;
-        path.push(e);
-    }
-    let e2 = e.next;
-    while (e !== e2) {
-        if (++tests && strictlyRightOf(line(e2), p)) {
-            while (e2.obtuse && (++tests && leftOrOnTopOf(approxBisectorNext(e2), p))) {
-                e2 = e2.next;
-            }
-            if (!e2.twin) {
-                throw { geom: true, message: "out of bounds" };
-            }
-            e = e2.twin;
-            path.push(e);
-            e2 = e.next;
-        }
-        else {
-            e2 = e2.next;
-        }
-    }
-    return { orient_tests: tests, path: path };
-}
-exports.celestialWalkStats = celestialWalkStats;
-function visibilityWalkStats(einit, p) {
-    let tests = 0;
-    let e = einit;
-    let path = [e];
-    if (++tests && strictlyRightOf(line(e), p)) {
-        if (!e.twin) {
-            throw { geom: true, message: "out of bounds" };
-        }
-        e = e.twin;
-        path.push(e);
-    }
-    let e2 = e.next;
-    while (e !== e2) {
-        if (++tests && strictlyRightOf(line(e2), p)) {
-            if (!e2.twin) {
-                throw { geom: true, message: "out of bounds" };
-            }
-            e = e2.twin;
-            path.push(e);
-            e2 = e.next;
-        }
-        else {
-            e2 = e2.next;
-        }
-    }
-    return { orient_tests: tests, path: path };
-}
-exports.visibilityWalkStats = visibilityWalkStats;
-function straightWalkStats(einit, p1, p2) {
-    let tests = 0;
-    let e = einit;
-    let path = [e];
-    let vertexOrientCache = new Map();
-    // NOTE: Dynamic programming is used here to ensure we get
-    // the absolutely optimal implementation in terms of the
-    // number of orientation tests. In practice one would need
-    // to unroll the code significantly in order to eliminate 
-    // the dynamic lookups without incurring superfluous 
-    // orientation tests. We haven't done so here because that
-    // would lead to a lot of implementation complexity, hard
-    // to read code, bugs etc.
-    // As a result, this code is fair ONLY when comparing
-    // based on the number of orientation tests, NOT when 
-    // comparing based on wall-clock time.
-    let vertexOrient = (v) => {
-        if (!vertexOrientCache.has(v)) {
-            tests++;
-            vertexOrientCache.set(v, orient(p1, p2, v.pos));
-        }
-        return vertexOrientCache.get(v);
-    };
-    let vertexLeft = (v) => {
-        return vertexOrient(v) >= 0;
-    };
-    let vertexRight = (v) => {
-        return vertexOrient(v) <= 0;
-    };
-    let e2 = e;
-    do {
-        if (++tests && strictlyRightOf(line(e2), p2)) {
-            while (!(vertexRight(e2.origin) && vertexLeft(e2.target))) {
-                e2 = e2.next;
-            }
-            if (!e2.twin) {
-                throw { geom: true, message: "out of bounds" };
-            }
-            e = e2.twin;
-            path.push(e);
-            e2 = e.next;
-        }
-        else {
-            e2 = e2.next;
-        }
-    } while (e2 !== e);
-    return { orient_tests: tests, path: path };
-}
-exports.straightWalkStats = straightWalkStats;
-function walkStats(walkType, initEdge, p1, p2) {
-    if (walkType == "Celestial") {
-        return celestialWalkStats(initEdge, p2);
-    }
-    else if (walkType == "Straight") {
-        return straightWalkStats(initEdge, p1, p2);
-    }
-    // (walkType == "Visibility")
-    return visibilityWalkStats(initEdge, p2);
-}
-exports.walkStats = walkStats;
-function mesh2html(title, m, delaunayFaces, walkStats, line, showAll) {
-    return `<html>
-  <head>
-    <title>
-      ${title}
-    </title>
-    <style>
-    html, body {
-        height: 95%;
-    }
-    #mesh-div {
-        height: 100%;
-        min-height: 100%;
-	    display: flex;
-        flex-direction: column;
-        padding: 20pt;
-    }
-    #mesh-svg {
-        display: flex;
-		flex-direction: column;
-        justify-content: center;
-        border:2px;
-        border-style: solid;
-    }
-    </style>
-  </head>
-  <body>
-    <div id="mesh-div">
-        ${mesh2svg(m, delaunayFaces, walkStats, line, showAll)}
-    </div>
-  </body>
-</html>`;
-}
-exports.mesh2html = mesh2html;
-function face2svg(face, clss) {
-    const p = face.some.origin.pos;
-    const words = [`<path class="${clss}" d="M ${p.x} ${p.y}`];
-    gatherFaceEdges(face).forEach((e) => {
-        const p = e.target.pos;
-        words.push(` L ${p.x} ${p.y}`);
-    });
-    words.push('"/>');
-    return words.join("");
-}
-exports.face2svg = face2svg;
-function mesh2svg(m, delaunayFaces, walkStats, line, showAll) {
-    function meshFaceLayer() {
-        const lines = [];
-        const faces = gatherFaces(m);
-        faces.forEach((f) => {
-            lines.push(face2svg(f, f.filled ? "mesh-filled-face" : "mesh-face"));
-        });
-        return lines.join('\n');
-    }
-    function delaunayLayer() {
-        if (!delaunayFaces) {
-            return "";
-        }
-        const lines = [];
-        gatherFaces(m).forEach((f) => {
-            if (isDelaunayTriangle(f)) {
-                lines.push(face2svg(f, "delaunay-face"));
-            }
-        });
-        return lines.join('\n');
-    }
-    function meshLineLayer() {
-        const lines = [];
-        const edges = gatherEdges(m);
-        edges.forEach((e) => {
-            const p1 = e.half.origin.pos;
-            const p2 = e.half.target.pos;
-            lines.push(`<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" class="${e.constrained ? "mesh-constrained-line" : "mesh-line"}"/>`);
-        });
-        return lines.join('\n');
-    }
-    function pathLayer() {
-        if (!walkStats) {
-            return "";
-        }
-        const lines = [];
-        const path = walkStats.path;
-        path.forEach((e) => {
-            const p1 = e.origin.pos;
-            const p2 = e.target.pos;
-            lines.push(`<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" class="path-edge"/>`);
-            lines.push(face2svg(e.left, "path-face"));
-        });
-        return lines.join('\n');
-    }
-    function arrowLayer() {
-        if (!line) {
-            return "";
-        }
-        const p1 = line.p1;
-        const p2 = line.p2;
-        return `<circle cx="${p1.x}" cy="${p1.y}" r="5" id="arrow-origin"/>
-            ${p2 ? `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" id="arrow" marker-end="url(#arrow-head)"/>` : ""}`;
-    }
-    return `<svg viewBox="${showAll ? "-80000 -80000 160000 160000" : "-22000 -22000 44000 44000"}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" version="1.1" id="mesh-svg">
-    <style type="text/css">
-    .mesh-line {
-        stroke-width:100;
-        stroke:rgb(100,100,100);
-    }
-    .mesh-constrained-line {
-        stroke-width:200;
-        stroke:rgb(50,50,50);
-    }
-    #arrow {
-        stroke-width:200;
-        stroke:rgb(0,0,200);
-    }
-    #arrow-head {
-        fill:rgb(0,0,200);
-    }
-    #arrow-origin {
-        fill:rgb(0,0,200);
-    }
-    .mesh-face {
-        fill:rgb(255,255,255);
-    }
-    .mesh-filled-face {
-        fill:rgb(200, 200, 200);
-    }
-    .path-face {
-        fill:rgba(100, 200, 100,0.5);
-    }
-    .delaunay-face {
-        fill:rgba(200, 200, 100,0.3);
-    }
-    .path-edge {
-        stroke-width:300;
-        stroke:rgba(150,0,200,0.5); 
-    }
-    </style>
-    <defs>
-        <marker id="arrow-head" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
-            <path d="M0,0 L0,6 L9,3 z" class="arrowhead"/>
-        </marker>
-    </defs>
-    <g id="mesh-face-layer">
-        ${meshFaceLayer()}
-    </g>    
-    <g id="delaunay-layer">
-        ${delaunayLayer()}
-    </g>
-    <g id="mesh-line-layer">
-        ${meshLineLayer()}
-    </g>
-    <g id="path-layer">
-        ${pathLayer()}
-    </g>
-    <g id="arrow-layer">
-        ${arrowLayer()}
-    </g>
-</svg>`;
-}
-exports.mesh2svg = mesh2svg;
-const randomPointDistribution = Random.integer(-64500, 64500);
-function randomPoint() {
-    let x = randomPointDistribution(mersenne);
-    let y = randomPointDistribution(mersenne);
-    return { x: x, y: y };
-}
-exports.randomPoint = randomPoint;
-function randomPointCloud(n) {
-    const pointCloud = [];
-    for (var i = 0; i < n; i++) {
-        pointCloud.push(randomPoint());
-    }
-    return pointCloud;
-}
-exports.randomPointCloud = randomPointCloud;
-function randomMesh(meshType, boundarySplits = -1) {
-    if (meshType == "Floorplan") {
-        let m;
-        while (!m) {
-            const random = new Random(Random.engines.nativeMath);
-            try {
-                m = floorplan_1.randomFloorplanMesh(random, true);
-            }
-            catch (e) {
-                if (!e.geom) {
-                    throw e;
-                }
-            }
-        }
-        return m;
-    }
-    return meshFromPointCloud(meshType, randomPointCloud(200), boundarySplits);
-}
-exports.randomMesh = randomMesh;
-function perturb(m) {
-    for (let c = 0; c < 1000; c++) {
-        const f = walk(m.north, randomPoint());
-        if (!f) {
-            continue;
-        }
-        if (f.some.twin && flipableEdge(f.some)) {
-            flipEdge(f.some);
-        }
-        else if (f.some.next.twin && flipableEdge(f.some.next)) {
-            flipEdge(f.some.next);
-        }
-        else if (f.some.next.next.twin && flipableEdge(f.some.next.next)) {
-            flipEdge(f.some.next.next);
-        }
-    }
-}
-exports.perturb = perturb;
-function initialMesh(meshType, boundarySplits = -1) {
-    if (boundarySplits < 0) {
-        boundarySplits = 0;
-        if (meshType == "Symmetric") {
-            boundarySplits = 5;
-        }
-    }
-    let m = mesh(boundarySplits);
-    if (meshType == "Symmetric") {
-        insertVertex(m, { x: 0, y: 0 });
-        let e = m.north;
-        let a = 0;
-        const r = 65536;
-        do {
-            e.origin.pos = { x: Math.sin(a) * r, y: Math.cos(a) * r };
-            a = a - Math.PI / 64;
-            e = e.next.twin.next;
-        } while (e != m.north);
-        e = m.north;
-        do {
-            precomputeObtuseness(e);
-            precomputeObtuseness(e.next);
-            precomputeObtuseness(e.next.next);
-        } while (e != m.north);
-        //delaunafy(m)
-    }
-    else {
-        triangulateMesh(m);
-    }
-    return m;
-}
-exports.initialMesh = initialMesh;
-function fillMeshFromPointCloud(m, meshType, pointCloud) {
-    if (meshType == "Symmetric") {
-        pointCloud = pointCloud.filter(((p) => Math.sqrt((p.x * p.x) + (p.y * p.y)) < 65536));
-    }
-    pointCloud.forEach((p) => {
-        insertVertex(m, p);
-    });
-    if (meshType == "Thin") {
-        // do nothing
-    }
-    else if (meshType == "Delaunay" || meshType == "Symmetric") {
-        delaunafy(m);
-    }
-    else if (meshType == "Convex") {
-        delaunafy(m);
-        convexify(m);
-    }
-    return m;
-}
-exports.fillMeshFromPointCloud = fillMeshFromPointCloud;
-function meshFromPointCloud(meshType, pointCloud, boundarySplits = -1) {
-    const m = initialMesh(meshType, boundarySplits);
-    fillMeshFromPointCloud(m, meshType, pointCloud);
-    return m;
-}
-exports.meshFromPointCloud = meshFromPointCloud;
-function splitBoundaryEdgeInConvexMesh(m, e, p) {
-    // pre: m must be convex, p must be on e, t.twin must be undefined (i.e.: e must be a boundary edge)
-    // post: m will be convex, e split in two with a vertex at p
-    const en = e.next;
-    const ep = e.prev;
-    const v = { pos: p };
-    const er = { origin: e.origin, target: v, prev: ep, left: e.left };
-    const el = { origin: v, target: e.target, prev: er, next: en, left: e.left };
-    er.next = el;
-    e.left.some = el;
-    en.prev = el;
-    ep.next = er;
-    const eel = e.edge;
-    el.edge = eel;
-    eel.half = el;
-    const eer = { half: er, constrained: true };
-    er.edge = eer;
-    v.outgoing = el;
-    e.origin.outgoing = er;
-    precomputeObtusenessForNewHalfEdge(er);
-    precomputeObtusenessForNewHalfEdge(el);
-    if (m.north == e) {
-        m.north = el;
-    }
-    return [el, er];
-}
-exports.splitBoundaryEdgeInConvexMesh = splitBoundaryEdgeInConvexMesh;
-function splitBoundaryEdgeInTriangularMesh(m, e, p) {
-    // pre: m must be triangular, p must be on e, t.twin must be undefined (i.e.: e must be a boundary edge)
-    // post: m will be triangular, e and e.left split in two with a vertex at p
-    const en = e.next;
-    const ep = e.prev;
-    const v = { pos: p };
-    const er = { origin: e.origin, target: v, prev: ep };
-    const el = { origin: v, target: e.target, next: en };
-    const ern = { origin: er.target, target: ep.origin, prev: er, next: ep };
-    er.next = ern;
-    const elp = { origin: en.target, target: el.origin, prev: en, next: el };
-    el.prev = elp;
-    elp.twin = ern;
-    ern.twin = elp;
-    en.prev = el;
-    en.next = elp;
-    ep.prev = ern;
-    ep.next = er;
-    const eel = e.edge;
-    el.edge = eel;
-    eel.half = el;
-    const eer = { half: er, constrained: true };
-    er.edge = eer;
-    const ee = { half: ern, constrained: false };
-    ern.edge = ee;
-    elp.edge = ee;
-    const fl = e.left;
-    fl.some = el;
-    const fr = { some: er };
-    el.left = fl;
-    en.left = fl;
-    elp.left = fl;
-    er.left = fr;
-    ern.left = fr;
-    ep.left = fr;
-    v.outgoing = el;
-    e.origin.outgoing = er;
-    precomputeObtusenessForNewHalfEdge(er);
-    precomputeObtusenessForNewHalfEdge(ern);
-    precomputeObtusenessForNewHalfEdge(elp);
-    precomputeObtusenessForNewHalfEdge(el);
-    if (m.north == e) {
-        m.north = el;
-    }
-    return [el, er];
-}
-exports.splitBoundaryEdgeInTriangularMesh = splitBoundaryEdgeInTriangularMesh;
 function vec2String(p) {
     return `(${p.x},${p.y})`;
 }
@@ -1379,6 +861,1103 @@ exports.floodFill = floodFill;
 
 /***/ }),
 /* 1 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+function treatedAll(thing) {
+    throw Error(`did not treat: ${thing}`);
+}
+exports.treatedAll = treatedAll;
+
+
+/***/ }),
+/* 2 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const common_1 = __webpack_require__(1);
+const Geom = __webpack_require__(0);
+const Pointcloud = __webpack_require__(3);
+const Floorplan = __webpack_require__(4);
+const Walk = __webpack_require__(5);
+const Render = __webpack_require__(6);
+const Random = __webpack_require__(7);
+const meshTypes = ["Delaunay Pointcloud", "Thintriangles Pointcloud", "Convex Pointcloud", "Delaunayish Floorplan", "Convex Floorplan", "Subdivided Floorplan"];
+const walkTypes = ["Straight", "Visibility", "Celestial"];
+const random = new Random(Random.engines.nativeMath);
+function randomMesh(meshType) {
+    if (meshType == "Delaunay Pointcloud") {
+        return Pointcloud.randomMesh(random, "Delaunay");
+    }
+    else if (meshType == "Thintriangles Pointcloud") {
+        return Pointcloud.randomMesh(random, "Thin");
+    }
+    else if (meshType == "Convex Pointcloud") {
+        return Pointcloud.randomMesh(random, "Convex");
+    }
+    else if (meshType == "Delaunayish Floorplan") {
+        return Floorplan.randomMesh(random, false, false);
+    }
+    else if (meshType == "Convex Floorplan") {
+        return Floorplan.randomMesh(random, false, true);
+    }
+    else if (meshType == "Subdivided Floorplan") {
+        return Floorplan.randomMesh(random, true, false);
+    }
+    return common_1.treatedAll(meshType);
+}
+let currMesh;
+let currMeshType;
+function selectMeshHandler(ev) {
+    selectMesh(this.value);
+}
+let meshSVG;
+let arrowLayer;
+let arrowOrigin = null;
+let arrowTarget = null;
+let pathLayer;
+function selectMesh(meshType) {
+    if (currMeshType && meshType == currMeshType) {
+        return;
+    }
+    document.getElementById("status-div").innerHTML = '';
+    document.getElementById("select-mesh").classList.remove("warning");
+    document.getElementById("select-walk").classList.remove("warning");
+    if (currWalkType == "Visibility" && (!meshType.includes("Delaunay"))) {
+        document.getElementById("status-div").innerHTML = '<span class="warning">This combination may loop!</span>';
+        document.getElementById("select-walk").classList.add("warning");
+    }
+    currMeshType = meshType;
+    currMesh = randomMesh(currMeshType);
+    let meshDIV = document.getElementById("mesh-div");
+    meshDIV.innerHTML = Render.mesh2svg(currMesh);
+    meshSVG = document.getElementById("mesh-svg");
+    meshSVG.addEventListener("click", meshClickHandler);
+    arrowLayer = document.getElementById("arrow-layer");
+    pathLayer = document.getElementById("path-layer");
+    arrowOrigin = null;
+    arrowTarget = null;
+    currPathInitFace = null;
+    currWalkStats = null;
+}
+function meshSVGEventPos(evt) {
+    if (!meshSVG) {
+        return { x: 0, y: 0 };
+    }
+    let x = evt.clientX;
+    let y = evt.clientY;
+    let sm = meshSVG.getScreenCTM().inverse(); // TODO: handle properly the fact that getScreenCTM can return null
+    return { x: Math.round((sm.a * x) + (sm.c * y) + sm.e), y: Math.round((sm.b * x) + (sm.d * y) + sm.f) };
+}
+let currPathInitFace = null;
+let currWalkStats = null;
+function updatePath() {
+    if (currPathInitFace === null || arrowOrigin === null || arrowTarget === null || currWalkType == undefined) {
+        return;
+    }
+    currWalkStats = Walk.stats(currWalkType, currPathInitFace.some, arrowOrigin, arrowTarget);
+    drawPath();
+}
+function meshClickHandler(ev) {
+    const mev = ev;
+    if (arrowOrigin === null || arrowTarget !== null) {
+        arrowOrigin = meshSVGEventPos(mev);
+        if (currMesh) {
+            currPathInitFace = Geom.walk(currMesh.north, arrowOrigin);
+        }
+        arrowTarget = null;
+        currWalkStats = null;
+    }
+    else {
+        arrowTarget = meshSVGEventPos(mev);
+        if (currPathInitFace !== null) {
+            updatePath();
+        }
+    }
+    drawArrow();
+    drawPath();
+}
+function drawPath() {
+    if (!pathLayer) {
+        return;
+    }
+    let statusLine = "";
+    let lines = [];
+    if (currPathInitFace !== null) {
+        lines.push(Render.face2svg(currPathInitFace, "path-face"));
+    }
+    if (currWalkStats !== null) {
+        const currPath = currWalkStats.path;
+        currPath.forEach((e) => {
+            if (e.left !== currPathInitFace) {
+                const p1 = e.origin.pos;
+                const p2 = e.target.pos;
+                lines.push('<line x1="' + p1.x + '" y1="' + p1.y + '" x2="' + p2.x + '" y2="' + p2.y + '" class="path-edge"/>');
+                lines.push(Render.face2svg(e.left, "path-face"));
+            }
+        });
+        statusLine = `Faces:&nbsp;<span class="facecount">${currPath.length}</span>, Orientation Tests:&nbsp;<span class="orientcount">${currWalkStats.orient_tests}</span>`;
+    }
+    pathLayer.innerHTML = lines.join("\n");
+    document.getElementById("status-div").innerHTML = statusLine;
+}
+function drawArrow() {
+    if (!arrowLayer) {
+        return;
+    }
+    let lines = [];
+    if (arrowOrigin !== null) {
+        lines.push('<circle cx="' + arrowOrigin.x + '" cy="' + arrowOrigin.y + '" r="5" id="arrow-origin"/>');
+        if (arrowTarget !== null) {
+            lines.push('<line x1="' + arrowOrigin.x + '" y1="' + arrowOrigin.y + '" x2="' + arrowTarget.x + '" y2="' + arrowTarget.y + '" id="arrow" marker-end="url(#arrow-head)"/>');
+        }
+    }
+    arrowLayer.innerHTML = lines.join("\n");
+}
+let currWalkType;
+function selectWalkHandler(ev) {
+    selectWalk(this.value);
+}
+function selectWalk(walkType) {
+    if (currWalkType && walkType == currWalkType) {
+        return;
+    }
+    document.getElementById("status-div").innerHTML = '';
+    document.getElementById("select-mesh").classList.remove("warning");
+    document.getElementById("select-walk").classList.remove("warning");
+    if (walkType == "Visibility" && currMeshType && (!currMeshType.includes("Delaunay"))) {
+        document.getElementById("status-div").innerHTML = '<span class="warning">This combination may loop!</span>';
+        document.getElementById("select-mesh").classList.add("warning");
+    }
+    currWalkType = walkType;
+    updatePath();
+}
+function optionsHTML(options) {
+    const lines = [];
+    options.forEach((v) => {
+        lines.push(`<option value="${v}">${v}</option>`);
+    });
+    return lines.join('\n');
+}
+document.getElementById("select-mesh").innerHTML = optionsHTML(meshTypes);
+document.getElementById("select-walk").innerHTML = optionsHTML(walkTypes);
+document.getElementById("select-mesh").addEventListener("change", selectMeshHandler);
+document.getElementById("select-walk").addEventListener("change", selectWalkHandler);
+selectMesh((document.getElementById("select-mesh")).value);
+selectWalk((document.getElementById("select-walk")).value);
+
+
+/***/ }),
+/* 3 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const common_1 = __webpack_require__(1);
+const Geom = __webpack_require__(0);
+// take some distance from the mesh boundaries
+const MARGIN = Math.round(Geom.MESH_SIZE * 0.00789654383154);
+const MIN_MESH_COORD = Geom.MIN_MESH_COORD + MARGIN;
+const MAX_MESH_COORD = Geom.MAX_MESH_COORD - MARGIN;
+function randomPoint(random) {
+    let x = random.integer(MIN_MESH_COORD, MAX_MESH_COORD);
+    let y = random.integer(MIN_MESH_COORD, MAX_MESH_COORD);
+    return { x: x, y: y };
+}
+exports.randomPoint = randomPoint;
+function randomMesh(random, meshType) {
+    return meshFromPointCloud(meshType, randomPointCloud(random, 200));
+}
+exports.randomMesh = randomMesh;
+function randomPointCloud(random, n) {
+    const pointCloud = [];
+    for (var i = 0; i < n; i++) {
+        pointCloud.push(randomPoint(random));
+    }
+    return pointCloud;
+}
+exports.randomPointCloud = randomPointCloud;
+function fillMeshFromPointCloud(m, meshType, pointCloud) {
+    pointCloud.forEach((p) => {
+        Geom.insertVertex(m, p);
+    });
+    if (meshType == "Thin") {
+        return m;
+    }
+    else if (meshType == "Delaunay") {
+        Geom.delaunafy(m);
+        return m;
+    }
+    else if (meshType == "Convex") {
+        Geom.delaunafy(m);
+        Geom.convexify(m);
+        return m;
+    }
+    return common_1.treatedAll(meshType);
+}
+exports.fillMeshFromPointCloud = fillMeshFromPointCloud;
+function meshFromPointCloud(meshType, pointCloud) {
+    const m = Geom.mesh();
+    fillMeshFromPointCloud(m, meshType, pointCloud);
+    return m;
+}
+exports.meshFromPointCloud = meshFromPointCloud;
+
+
+/***/ }),
+/* 4 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const Geom = __webpack_require__(0);
+function randomMesh(random, subdivide, convexify) {
+    const floorplan1 = randomFloorplan(random);
+    const floorplan2 = randomFloorplan(random);
+    const angle2 = random.real((30 / 180) * Math.PI, (60 / 180) * Math.PI);
+    rotateFloorplan(floorplan2, angle2);
+    const interAxisRadius = random.real(10000, 12000);
+    const interAxisAngle = random.pick([(45 / 180) * Math.PI, (135 / 180) * Math.PI, (225 / 180) * Math.PI, (315 / 180) * Math.PI])
+        + random.real((-10 / 180) * Math.PI, (10 / 180) * Math.PI);
+    const delta1 = { x: Math.cos(interAxisAngle) * interAxisRadius, y: Math.sin(interAxisAngle) * interAxisRadius };
+    translateFloorplan(floorplan1, delta1);
+    const delta2 = Geom.mult(delta1, -1);
+    translateFloorplan(floorplan2, delta2);
+    const m = floorplans2mesh([floorplan1, floorplan2]);
+    if (!convexify && subdivide) {
+        const edges = Geom.gatherEdges(m);
+        const waitingList = [];
+        edges.forEach((ee) => { waitingList.push(ee); });
+        while (waitingList.length > 0) {
+            const ee = waitingList.pop();
+            const e = ee.half;
+            if (ee.constrained && e.twin && Geom.edgeLength(ee) > 3000) {
+                const v = Geom.splitEdgeApproximately(e, Geom.mult(Geom.plus(e.origin.pos, e.target.pos), .5));
+                waitingList.push(Geom.connected(e.origin, v));
+                waitingList.push(Geom.connected(v, e.target));
+            }
+        }
+        Geom.floodFill(m);
+        let e = m.north;
+        for (let x = -30000; x <= 30000; x += 1500) {
+            for (let y = -30000; y <= 30000; y += 1500) {
+                const p = { x: x + random.integer(-400, 400), y: y + random.integer(-400, 400) };
+                const f = Geom.walk(e, p);
+                e = f.some;
+                if (f.filled) {
+                    Geom.insertVertexFromEdge(e, p);
+                }
+            }
+        }
+        Geom.delaunafy(m);
+    }
+    else if (convexify) {
+        Geom.convexify(m);
+    }
+    return m;
+}
+exports.randomMesh = randomMesh;
+function randomFloorplan(random) {
+    const dim = 6;
+    const size = 30000;
+    const lines = randomLines(random, dim, size);
+    const bites = 4;
+    const pattern = randomPattern(random, dim, bites);
+    const floorplan = makeFloorplan(dim, lines, pattern);
+    simplifyFloorplan(floorplan);
+    const desiredFillets = 1;
+    let createdFillets = 0;
+    let tries = 0;
+    const maxTries = desiredFillets * 2;
+    while (tries < maxTries && createdFillets < desiredFillets) {
+        const corners = gatherStraightCorners(floorplan);
+        if (corners.length == 0) {
+            break;
+        }
+        random.shuffle(corners);
+        const corner = corners[0];
+        if (filletStraightCorner(floorplan, corner)) {
+            createdFillets++;
+        }
+        tries++;
+    }
+    return floorplan;
+}
+function floorplan2mesh(floorplan) {
+    return floorplans2mesh([floorplan]);
+}
+function floorplans2mesh(floorplans) {
+    const m = Geom.mesh();
+    floorplans.forEach((floorplan) => {
+        floorplan.edges.forEach((e) => {
+            Geom.draw(m, { p1: Geom.roundVec2(e.origin.pos), p2: Geom.roundVec2(e.target.pos) }, true, false);
+        });
+    });
+    Geom.delaunafy(m);
+    Geom.floodFill(m);
+    return m;
+}
+function rotateFloorplan(floorplan, angle) {
+    floorplan.vertices.forEach((vertex) => {
+        const p = vertex.pos;
+        vertex.pos = {
+            x: p.x * Math.cos(angle) - p.y * Math.sin(angle),
+            y: p.x * Math.sin(angle) + p.y * Math.cos(angle)
+        };
+    });
+}
+function translateFloorplan(floorplan, delta) {
+    floorplan.vertices.forEach((vertex) => {
+        const p = vertex.pos;
+        vertex.pos = Geom.plus(vertex.pos, delta);
+    });
+}
+function cells2svgSolid(cells) {
+    const lines = [];
+    cells.forEach((column) => {
+        column.forEach((cell) => {
+            let clss = "floorplan-outside";
+            if (cell.inside) {
+                clss = "floorplan-inside";
+            }
+            lines.push(`<rect class="${clss}" width="${cell.width}" height="${cell.height}" x="${cell.x}" y="${cell.y}"/>`);
+        });
+    });
+    return lines.join("\n");
+}
+function gatherStraightCorners(floorplan) {
+    const corners = [];
+    floorplan.edges.forEach((ie) => {
+        if (ie.target.outgoing.size != 1) {
+            return;
+        }
+        ie.target.outgoing.forEach((oe) => {
+            if (ie.origin.pos.x == ie.target.pos.x) {
+                if (oe.origin.pos.y == oe.target.pos.y) {
+                    if ((ie.origin.pos.y < ie.target.pos.y && oe.origin.pos.x > oe.target.pos.x)
+                        || (ie.origin.pos.y > ie.target.pos.y && oe.origin.pos.x < oe.target.pos.x)) {
+                        corners.push([ie, oe]);
+                    }
+                }
+            }
+            else if (ie.origin.pos.y == ie.target.pos.y) {
+                if (oe.origin.pos.x == oe.target.pos.x) {
+                    if ((ie.origin.pos.x < ie.target.pos.x && oe.origin.pos.y < oe.target.pos.y)
+                        || (ie.origin.pos.x > ie.target.pos.x && oe.origin.pos.y > oe.target.pos.y)) {
+                        corners.push([ie, oe]);
+                    }
+                }
+            }
+        });
+    });
+    return corners;
+}
+function filletStraightCorner(floorplan, corner) {
+    const [ie, oe] = corner;
+    const m = floorplan2mesh(floorplan);
+    const gieorigin = Geom.walkToClosestVertex(m.north, ie.origin.pos);
+    if (!Geom.pointsCoincide(gieorigin.pos, ie.origin.pos)) {
+        return false;
+    }
+    let gie = Geom.pivot(gieorigin, ie.target.pos);
+    if (!Geom.pointsCoincide(gie.origin.pos, ie.origin.pos) ||
+        !Geom.pointsCoincide(gie.target.pos, ie.target.pos)) {
+        return false;
+    }
+    const goeorigin = Geom.walkToClosestVertex(m.north, oe.origin.pos);
+    if (!Geom.pointsCoincide(goeorigin.pos, oe.origin.pos)) {
+        return false;
+    }
+    let goe = Geom.pivot(goeorigin, oe.target.pos);
+    if (!Geom.pointsCoincide(goe.origin.pos, oe.origin.pos) ||
+        !Geom.pointsCoincide(goe.target.pos, oe.target.pos)) {
+        return false;
+    }
+    const giel = Geom.halfEdgeLength(gie);
+    const goel = Geom.halfEdgeLength(goe);
+    const radius = Math.min(giel, goel);
+    let stepAngle = Math.PI / 8;
+    for (let c = 0; c < 6; c++) {
+        if ((stepAngle * radius) < 2000) {
+            break;
+        }
+        stepAngle = stepAngle / 2;
+    }
+    const angleEpsilon = stepAngle / 65536;
+    let startAngle = stepAngle;
+    let endAngle = (Math.PI / 2) - stepAngle;
+    let center;
+    let needle;
+    let coneedle;
+    if (giel <= goel) {
+        center = Geom.plus(gie.origin.pos, Geom.rotateLeft(Geom.halfEdgeDelta(gie)));
+        coneedle = Geom.minus(gie.origin.pos, center);
+        needle = Geom.rotateLeft(coneedle);
+        if (giel != goel) {
+            startAngle -= stepAngle;
+            const newoetargetpos = Geom.roundVec2(Geom.plus(center, needle));
+            const newoetarget = Geom.insertVertex(m, newoetargetpos);
+            if (!Geom.pointsCoincide(newoetarget.pos, newoetargetpos)) {
+                return false;
+            }
+            goe = Geom.pivot(goe.origin, newoetargetpos);
+            if (!Geom.pointsCoincide(goe.origin.pos, oe.origin.pos) ||
+                !Geom.pointsCoincide(goe.target.pos, newoetargetpos)) {
+                return false;
+            }
+        }
+    }
+    else {
+        center = Geom.plus(goe.target.pos, Geom.rotateLeft(Geom.halfEdgeDelta(goe)));
+        endAngle += stepAngle;
+        needle = Geom.minus(goe.target.pos, center);
+        coneedle = Geom.rotateRight(needle);
+        const newieoriginpos = Geom.roundVec2(Geom.plus(center, coneedle));
+        const newieorigin = Geom.insertVertex(m, newieoriginpos);
+        if (!Geom.pointsCoincide(newieorigin.pos, newieoriginpos)) {
+            return false;
+        }
+        gie = Geom.pivot(newieorigin, ie.target.pos);
+        if (!Geom.pointsCoincide(gie.origin.pos, newieoriginpos) ||
+            !Geom.pointsCoincide(gie.target.pos, ie.target.pos)) {
+            return false;
+        }
+    }
+    if (!gie.edge.constrained || !goe.edge.constrained) {
+        return false;
+    }
+    try {
+        Geom.flipToConnectVertices(gie.origin, goe.target);
+    }
+    catch (e) {
+        if (!e.message || (e.message != "intersecting existing vertex" && e.message != "intersecting constrained edge")) {
+            throw e;
+        }
+    }
+    Geom.floodFill(m);
+    if (!gie.left.filled || !gie.twin || gie.twin.left.filled) {
+        return false;
+    }
+    if (goe.next.next != gie || !goe.twin || goe.twin.left.filled) {
+        return false;
+    }
+    const filletPoints = [];
+    for (let angle = startAngle; ((endAngle - angle) > -angleEpsilon); angle += stepAngle) {
+        filletPoints.push(Geom.plus(Geom.plus(center, Geom.mult(needle, Math.sin(angle))), Geom.mult(coneedle, Math.cos(angle))));
+    }
+    // remove the corner (including, possibly, the vertex)
+    removeEdge(floorplan, ie);
+    removeEdge(floorplan, oe);
+    if (ie.target.incoming.size == 0 && ie.target.outgoing.size == 0) {
+        floorplan.vertices.delete(ie.target);
+    }
+    // substitute with the fillet
+    let currVertex = ie.origin;
+    filletPoints.forEach((p) => {
+        const nextVertex = newVertex(floorplan, p);
+        if (!Geom.pointsCoincide(currVertex.pos, nextVertex.pos)) {
+            newEdge(floorplan, currVertex, nextVertex);
+        }
+        currVertex = nextVertex;
+    });
+    if (!Geom.pointsCoincide(currVertex.pos, oe.target.pos)) {
+        newEdge(floorplan, currVertex, oe.target);
+    }
+    return true;
+}
+function newFloorplan() {
+    return { edges: new Set(), vertices: new Set() };
+}
+function newVertex(floorplan, p) {
+    const vertex = { pos: p, incoming: new Set(), outgoing: new Set() };
+    floorplan.vertices.add(vertex);
+    return vertex;
+}
+function newEdge(floorplan, origin, target) {
+    if (Geom.pointsCoincide(origin.pos, target.pos)) {
+        throw "origin and target coincide";
+    }
+    const edge = { origin: origin, target: target };
+    floorplan.edges.add(edge);
+    origin.outgoing.add(edge);
+    target.incoming.add(edge);
+}
+function removeEdge(floorplan, e) {
+    e.origin.outgoing.delete(e);
+    e.target.incoming.delete(e);
+    floorplan.edges.delete(e);
+}
+function simplifyFloorplan(floorplan) {
+    const waitingList = [];
+    const waitingSet = new Set();
+    function scheduleVertex(v) {
+        if (!waitingSet.has(v)) {
+            waitingList.push(v);
+            waitingSet.add(v);
+        }
+    }
+    floorplan.vertices.forEach((v) => { scheduleVertex(v); });
+    while (waitingList.length > 0) {
+        const vertex = waitingList.pop();
+        waitingSet.delete(vertex);
+        const colinearPairs = [];
+        vertex.incoming.forEach((ie) => {
+            vertex.outgoing.forEach((oe) => {
+                if (Geom.orient(ie.origin.pos, vertex.pos, oe.target.pos) == 0) {
+                    colinearPairs.push([ie, oe]);
+                }
+            });
+        });
+        colinearPairs.forEach((pair) => {
+            const [ie, oe] = pair;
+            removeEdge(floorplan, ie);
+            removeEdge(floorplan, oe);
+            newEdge(floorplan, ie.origin, oe.target);
+            scheduleVertex(ie.origin);
+            scheduleVertex(oe.target);
+        });
+        if (vertex.incoming.size == 0 && vertex.outgoing.size == 0) {
+            floorplan.vertices.delete(vertex);
+        }
+    }
+}
+function makeFloorplan(dim, lines, pattern) {
+    const [hor, ver] = lines;
+    const floorplan = newFloorplan();
+    const vertexGrid = [];
+    for (let h = 0; h <= dim; h++) {
+        const column = [];
+        vertexGrid.push(column);
+        for (let v = 0; v <= dim; v++) {
+            const vertex = newVertex(floorplan, { x: hor[h], y: ver[v] });
+            column.push(vertex);
+        }
+    }
+    for (let h = 0; h < dim; h++) {
+        for (let v = 0; v < dim; v++) {
+            if (!pattern[h][v]) {
+                continue;
+            }
+            if (v == 0 || !(pattern[h][v - 1])) {
+                newEdge(floorplan, vertexGrid[h][v], vertexGrid[h + 1][v]);
+            }
+            if (h == dim - 1 || !(pattern[h + 1][v])) {
+                newEdge(floorplan, vertexGrid[h + 1][v], vertexGrid[h + 1][v + 1]);
+            }
+            if (v == dim - 1 || !(pattern[h][v + 1])) {
+                newEdge(floorplan, vertexGrid[h + 1][v + 1], vertexGrid[h][v + 1]);
+            }
+            if (h == 0 || !(pattern[h - 1][v])) {
+                newEdge(floorplan, vertexGrid[h][v + 1], vertexGrid[h][v]);
+            }
+        }
+    }
+    return floorplan;
+}
+function randomPattern(random, dim, bites) {
+    if (dim < 6) {
+        throw Error("dim must be 6 or greater");
+    }
+    const pattern = [];
+    for (let h = 0; h < dim; h++) {
+        const column = [];
+        pattern.push(column);
+        for (let v = 0; v < dim; v++) {
+            column.push(true);
+        }
+    }
+    for (let b = 0; b < bites; b++) {
+        let h;
+        let v;
+        if (random.bool()) {
+            // pick a corner
+            if (random.bool()) {
+                h = 0;
+            }
+            else {
+                h = dim - 1;
+            }
+            if (random.bool()) {
+                v = 0;
+            }
+            else {
+                v = dim - 1;
+            }
+        }
+        else if (random.bool()) {
+            // pick a sidepoint
+            if (random.bool()) {
+                // top or bottom
+                if (random.bool()) {
+                    // top
+                    v = 0;
+                    h = 2 + random.integer(0, dim - 4);
+                }
+                else {
+                    // bottom
+                    v = dim - 1;
+                    h = 2 + random.integer(0, dim - 4);
+                }
+            }
+            else {
+                // left or right
+                if (random.bool()) {
+                    // left
+                    h = 0;
+                    v = 2 + random.integer(0, dim - 4);
+                }
+                else {
+                    // right
+                    h = dim - 1;
+                    v = 2 + random.integer(0, dim - 4);
+                }
+            }
+        }
+        else {
+            // pick an interior point
+            h = 2 + random.integer(0, dim - 4);
+            v = 2 + random.integer(0, dim - 4);
+        }
+        for (let c = 0; c <= b; c++) {
+            if (h < 0 || h > dim - 1 || v < 0 || v > dim - 1) {
+                break;
+            }
+            if (!pattern[h][v]) {
+                break;
+            }
+            pattern[h][v] = false;
+            // step hor or ver
+            if (random.bool()) {
+                if (random.bool()) {
+                    h -= 1;
+                }
+                else {
+                    h += 1;
+                }
+            }
+            else {
+                if (random.bool()) {
+                    v -= 1;
+                }
+                else {
+                    v += 1;
+                }
+            }
+        }
+    }
+    return pattern;
+}
+function randomLines(random, dim, size) {
+    const halfSize = Math.round(size / 2);
+    const horWeights = [];
+    let totHorWeight = 0;
+    for (let c = 0; c <= dim; c++) {
+        const weight = random.integer(40, 200);
+        horWeights.push(weight);
+        totHorWeight += weight;
+    }
+    const hor = [];
+    let x = -halfSize;
+    for (let c = 0; c <= dim; c++) {
+        x += size * (horWeights[c] / totHorWeight);
+        hor.push(Math.round(x));
+    }
+    const verWeights = [];
+    let totVerWeight = 0;
+    for (let c = 0; c <= dim; c++) {
+        const weight = horWeights[c] + random.integer(-20, 60);
+        verWeights.push(weight);
+        totVerWeight += weight;
+    }
+    const ver = [];
+    let y = -halfSize;
+    for (let c = 0; c <= dim; c++) {
+        y += size * (verWeights[c] / totVerWeight);
+        ver.push(Math.round(y));
+    }
+    return [hor, ver];
+}
+function makeCells(dim, lines, pattern) {
+    const [hor, ver] = lines;
+    const cells = [];
+    for (let h = 0; h < dim; h++) {
+        const column = [];
+        cells.push(column);
+        for (let v = 0; v < dim; v++) {
+            const cell = {
+                x: hor[h], y: ver[v],
+                width: hor[h + 1] - hor[h], height: ver[v + 1] - ver[v],
+                inside: pattern[h][v]
+            };
+            column.push(cell);
+        }
+    }
+    return cells;
+}
+function cells2html(cells) {
+    return `<html>
+    <head>
+        <title>Floorplan</title>
+    </head>
+    <style>
+    html, body {
+        height: 100%;
+    }
+    #floorplan-div {
+        height: 100%;
+        min-height: 100%;
+	    display: flex;
+	    flex-direction: column;
+    }
+    #floorplan-svg {
+        display: flex;
+		flex-direction: column;
+        justify-content: center;
+    }
+    .floorplan-line {
+        font-size: 12px;
+        stroke-width:1;
+        stroke:rgb(0,0,0);
+    }
+    .floorplan-inside {
+        stroke:rgb(0,0,0);
+        stroke-width:100;
+        fill:rgb(0,0,180);
+    }
+    .floorplan-outside {
+        fill:rgb(255,255,255);
+    }    
+    </style>
+  </head>
+  <body>
+    <div id="floorplan-div">
+      ${cells2svg(cells)}
+    </div>
+  </body>
+</html>`;
+}
+function cells2svg(cells) {
+    return `<svg viewBox="-20000 -20000 40000 40000" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" version="1.1" id="floorplan-svg">
+    <defs>
+    </defs>
+    <g id="walls-layer">
+    </g>
+    <g id="solid-layer">
+        ${cells2svgSolid(cells)}
+    </g>
+</svg>`;
+}
+
+
+/***/ }),
+/* 5 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const common_1 = __webpack_require__(1);
+const Geom = __webpack_require__(0);
+function celestialStats(einit, p) {
+    let tests = 0;
+    let e = einit;
+    let path = [e];
+    if (++tests && Geom.strictlyRightOf(Geom.line(e), p)) {
+        if (!e.twin) {
+            throw { geom: true, message: "out of bounds" };
+        }
+        e = e.twin;
+        path.push(e);
+    }
+    let e2 = e.next;
+    while (e !== e2) {
+        if (++tests && Geom.strictlyRightOf(Geom.line(e2), p)) {
+            while (e2.obtuse && (++tests && Geom.leftOrOnTopOf(Geom.approxBisectorNext(e2), p))) {
+                e2 = e2.next;
+            }
+            if (!e2.twin) {
+                throw { geom: true, message: "out of bounds" };
+            }
+            e = e2.twin;
+            path.push(e);
+            e2 = e.next;
+        }
+        else {
+            e2 = e2.next;
+        }
+    }
+    return { orient_tests: tests, path: path };
+}
+exports.celestialStats = celestialStats;
+function visibilityStats(einit, p) {
+    let tests = 0;
+    let e = einit;
+    let path = [e];
+    if (++tests && Geom.strictlyRightOf(Geom.line(e), p)) {
+        if (!e.twin) {
+            throw { geom: true, message: "out of bounds" };
+        }
+        e = e.twin;
+        path.push(e);
+    }
+    let e2 = e.next;
+    while (e !== e2) {
+        if (++tests && Geom.strictlyRightOf(Geom.line(e2), p)) {
+            if (!e2.twin) {
+                throw { geom: true, message: "out of bounds" };
+            }
+            e = e2.twin;
+            path.push(e);
+            e2 = e.next;
+        }
+        else {
+            e2 = e2.next;
+        }
+    }
+    return { orient_tests: tests, path: path };
+}
+exports.visibilityStats = visibilityStats;
+function straightStats(einit, p1, p2) {
+    let tests = 0;
+    let e = einit;
+    let path = [e];
+    let vertexOrientCache = new Map();
+    // NOTE: Dynamic programming is used here to ensure we get
+    // the absolutely optimal implementation in terms of the
+    // number of orientation tests. In practice one would need
+    // to unroll the code significantly in order to eliminate 
+    // the dynamic lookups without incurring superfluous 
+    // orientation tests. We haven't done so here because that
+    // would lead to a lot of implementation complexity, hard
+    // to read code, bugs etc.
+    // As a result, this code is fair ONLY when comparing
+    // based on the number of orientation tests, NOT when 
+    // comparing based on wall-clock time.
+    let vertexOrient = (v) => {
+        if (!vertexOrientCache.has(v)) {
+            tests++;
+            vertexOrientCache.set(v, Geom.orient(p1, p2, v.pos));
+        }
+        return vertexOrientCache.get(v);
+    };
+    let vertexLeft = (v) => {
+        return vertexOrient(v) >= 0;
+    };
+    let vertexRight = (v) => {
+        return vertexOrient(v) <= 0;
+    };
+    let e2 = e;
+    do {
+        if (++tests && Geom.strictlyRightOf(Geom.line(e2), p2)) {
+            while (!(vertexRight(e2.origin) && vertexLeft(e2.target))) {
+                e2 = e2.next;
+            }
+            if (!e2.twin) {
+                throw { geom: true, message: "out of bounds" };
+            }
+            e = e2.twin;
+            path.push(e);
+            e2 = e.next;
+        }
+        else {
+            e2 = e2.next;
+        }
+    } while (e2 !== e);
+    return { orient_tests: tests, path: path };
+}
+exports.straightStats = straightStats;
+function stats(walkType, initEdge, p1, p2) {
+    if (walkType == "Celestial") {
+        return celestialStats(initEdge, p2);
+    }
+    else if (walkType == "Straight") {
+        return straightStats(initEdge, p1, p2);
+    }
+    else if (walkType == "Visibility") {
+        return visibilityStats(initEdge, p2);
+    }
+    return common_1.treatedAll(walkType);
+}
+exports.stats = stats;
+
+
+/***/ }),
+/* 6 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const Geom = __webpack_require__(0);
+function mesh2html(title, m, delaunayFaces, walkStats, line, showAll) {
+    return `<html>
+  <head>
+    <title>
+      ${title}
+    </title>
+    <style>
+    html, body {
+        height: 95%;
+    }
+    #mesh-div {
+        height: 100%;
+        min-height: 100%;
+	    display: flex;
+        flex-direction: column;
+        padding: 20pt;
+    }
+    #mesh-svg {
+        display: flex;
+		flex-direction: column;
+        justify-content: center;
+        border:2px;
+        border-style: solid;
+    }
+    </style>
+  </head>
+  <body>
+    <div id="mesh-div">
+        ${mesh2svg(m, delaunayFaces, walkStats, line, showAll)}
+    </div>
+  </body>
+</html>`;
+}
+exports.mesh2html = mesh2html;
+function face2svg(face, clss) {
+    const p = face.some.origin.pos;
+    const words = [`<path class="${clss}" d="M ${p.x} ${p.y}`];
+    Geom.gatherFaceEdges(face).forEach((e) => {
+        const p = e.target.pos;
+        words.push(` L ${p.x} ${p.y}`);
+    });
+    words.push('"/>');
+    return words.join("");
+}
+exports.face2svg = face2svg;
+function mesh2svg(m, delaunayFaces, walkStats, line, showAll) {
+    function meshFaceLayer() {
+        const lines = [];
+        const faces = Geom.gatherFaces(m);
+        faces.forEach((f) => {
+            lines.push(face2svg(f, f.filled ? "mesh-filled-face" : "mesh-face"));
+        });
+        return lines.join('\n');
+    }
+    function delaunayLayer() {
+        if (!delaunayFaces) {
+            return "";
+        }
+        const lines = [];
+        Geom.gatherFaces(m).forEach((f) => {
+            if (Geom.isDelaunayTriangle(f)) {
+                lines.push(face2svg(f, "delaunay-face"));
+            }
+        });
+        return lines.join('\n');
+    }
+    function meshLineLayer() {
+        const lines = [];
+        const edges = Geom.gatherEdges(m);
+        edges.forEach((e) => {
+            const p1 = e.half.origin.pos;
+            const p2 = e.half.target.pos;
+            lines.push(`<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" class="${e.constrained ? "mesh-constrained-line" : "mesh-line"}"/>`);
+        });
+        return lines.join('\n');
+    }
+    function pathLayer() {
+        if (!walkStats) {
+            return "";
+        }
+        const lines = [];
+        const path = walkStats.path;
+        path.forEach((e) => {
+            const p1 = e.origin.pos;
+            const p2 = e.target.pos;
+            lines.push(`<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" class="path-edge"/>`);
+            lines.push(face2svg(e.left, "path-face"));
+        });
+        return lines.join('\n');
+    }
+    function arrowLayer() {
+        if (!line) {
+            return "";
+        }
+        const p1 = line.p1;
+        const p2 = line.p2;
+        return `<circle cx="${p1.x}" cy="${p1.y}" r="5" id="arrow-origin"/>
+            ${p2 ? `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" id="arrow" marker-end="url(#arrow-head)"/>` : ""}`;
+    }
+    return `<svg viewBox="${showAll ? "-80000 -80000 160000 160000" : "-22000 -22000 44000 44000"}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" version="1.1" id="mesh-svg">
+    <style type="text/css">
+    .mesh-line {
+        stroke-width:100;
+        stroke:rgb(100,100,100);
+    }
+    .mesh-constrained-line {
+        stroke-width:200;
+        stroke:rgb(50,50,50);
+    }
+    #arrow {
+        stroke-width:200;
+        stroke:rgb(0,0,200);
+    }
+    #arrow-head {
+        fill:rgb(0,0,200);
+    }
+    #arrow-origin {
+        fill:rgb(0,0,200);
+    }
+    .mesh-face {
+        fill:rgb(255,255,255);
+    }
+    .mesh-filled-face {
+        fill:rgb(200, 200, 200);
+    }
+    .path-face {
+        fill:rgba(100, 200, 100,0.5);
+    }
+    .delaunay-face {
+        fill:rgba(200, 200, 100,0.3);
+    }
+    .path-edge {
+        stroke-width:300;
+        stroke:rgba(150,0,200,0.5); 
+    }
+    </style>
+    <defs>
+        <marker id="arrow-head" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" class="arrowhead"/>
+        </marker>
+    </defs>
+    <g id="mesh-face-layer">
+        ${meshFaceLayer()}
+    </g>    
+    <g id="delaunay-layer">
+        ${delaunayLayer()}
+    </g>
+    <g id="mesh-line-layer">
+        ${meshLineLayer()}
+    </g>
+    <g id="path-layer">
+        ${pathLayer()}
+    </g>
+    <g id="arrow-layer">
+        ${arrowLayer()}
+    </g>
+</svg>`;
+}
+exports.mesh2svg = mesh2svg;
+
+
+/***/ }),
+/* 7 */
 /***/ (function(module, exports, __webpack_require__) {
 
 var __WEBPACK_AMD_DEFINE_RESULT__;/*jshint eqnull:true*/
@@ -2098,723 +2677,6 @@ var __WEBPACK_AMD_DEFINE_RESULT__;/*jshint eqnull:true*/
     root[GLOBAL_KEY] = Random;
   }
 }(this));
-
-/***/ }),
-/* 2 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", { value: true });
-const Geom = __webpack_require__(0);
-let currMesh;
-let currMeshType;
-function selectMeshHandler(ev) {
-    selectMesh(this.value);
-}
-let meshSVG;
-let arrowLayer;
-let arrowOrigin = null;
-let arrowTarget = null;
-let pathLayer;
-function selectMesh(meshType) {
-    if (currMeshType && meshType == currMeshType) {
-        return;
-    }
-    document.getElementById("status-div").innerHTML = '';
-    document.getElementById("select-mesh").classList.remove("warning");
-    document.getElementById("select-walk").classList.remove("warning");
-    if (currWalkType == "Visibility" && (meshType != "Delaunay")) {
-        document.getElementById("status-div").innerHTML = '<span class="warning">This combination may loop!</span>';
-        document.getElementById("select-walk").classList.add("warning");
-    }
-    currMeshType = meshType;
-    currMesh = Geom.randomMesh(currMeshType);
-    let meshDIV = document.getElementById("mesh-div");
-    meshDIV.innerHTML = Geom.mesh2svg(currMesh);
-    meshSVG = document.getElementById("mesh-svg");
-    meshSVG.addEventListener("click", meshClickHandler);
-    arrowLayer = document.getElementById("arrow-layer");
-    pathLayer = document.getElementById("path-layer");
-    arrowOrigin = null;
-    arrowTarget = null;
-    currPathInitFace = null;
-    currWalkStats = null;
-}
-function meshSVGEventPos(evt) {
-    if (!meshSVG) {
-        return { x: 0, y: 0 };
-    }
-    let x = evt.clientX;
-    let y = evt.clientY;
-    let sm = meshSVG.getScreenCTM().inverse(); // TODO: handle properly the fact that getScreenCTM can return null
-    return { x: Math.round((sm.a * x) + (sm.c * y) + sm.e), y: Math.round((sm.b * x) + (sm.d * y) + sm.f) };
-}
-let currPathInitFace = null;
-let currWalkStats = null;
-function updatePath() {
-    if (currPathInitFace === null || arrowOrigin === null || arrowTarget === null || currWalkType == undefined) {
-        return;
-    }
-    currWalkStats = Geom.walkStats(currWalkType, currPathInitFace.some, arrowOrigin, arrowTarget);
-    drawPath();
-}
-function meshClickHandler(ev) {
-    const mev = ev;
-    if (arrowOrigin === null || arrowTarget !== null) {
-        arrowOrigin = meshSVGEventPos(mev);
-        if (currMesh) {
-            currPathInitFace = Geom.walk(currMesh.north, arrowOrigin);
-        }
-        arrowTarget = null;
-        currWalkStats = null;
-    }
-    else {
-        arrowTarget = meshSVGEventPos(mev);
-        if (currPathInitFace !== null) {
-            updatePath();
-        }
-    }
-    drawArrow();
-    drawPath();
-}
-function drawPath() {
-    if (!pathLayer) {
-        return;
-    }
-    let statusLine = "";
-    let lines = [];
-    if (currPathInitFace !== null) {
-        lines.push(Geom.face2svg(currPathInitFace, "path-face"));
-    }
-    if (currWalkStats !== null) {
-        const currPath = currWalkStats.path;
-        currPath.forEach((e) => {
-            if (e.left !== currPathInitFace) {
-                const p1 = e.origin.pos;
-                const p2 = e.target.pos;
-                lines.push('<line x1="' + p1.x + '" y1="' + p1.y + '" x2="' + p2.x + '" y2="' + p2.y + '" class="path-edge"/>');
-                lines.push(Geom.face2svg(e.left, "path-face"));
-            }
-        });
-        statusLine = `Faces:&nbsp;<span class="facecount">${currPath.length}</span>, Orientation Tests:&nbsp;<span class="orientcount">${currWalkStats.orient_tests}</span>`;
-    }
-    pathLayer.innerHTML = lines.join("\n");
-    document.getElementById("status-div").innerHTML = statusLine;
-}
-function drawArrow() {
-    if (!arrowLayer) {
-        return;
-    }
-    let lines = [];
-    if (arrowOrigin !== null) {
-        lines.push('<circle cx="' + arrowOrigin.x + '" cy="' + arrowOrigin.y + '" r="5" id="arrow-origin"/>');
-        if (arrowTarget !== null) {
-            lines.push('<line x1="' + arrowOrigin.x + '" y1="' + arrowOrigin.y + '" x2="' + arrowTarget.x + '" y2="' + arrowTarget.y + '" id="arrow" marker-end="url(#arrow-head)"/>');
-        }
-    }
-    arrowLayer.innerHTML = lines.join("\n");
-}
-let currWalkType;
-function selectWalkHandler(ev) {
-    selectWalk(this.value);
-}
-function selectWalk(walkType) {
-    if (currWalkType && walkType == currWalkType) {
-        return;
-    }
-    document.getElementById("status-div").innerHTML = '';
-    document.getElementById("select-mesh").classList.remove("warning");
-    document.getElementById("select-walk").classList.remove("warning");
-    if (walkType == "Visibility" && (currMeshType != "Delaunay")) {
-        document.getElementById("status-div").innerHTML = '<span class="warning">This combination may loop!</span>';
-        document.getElementById("select-mesh").classList.add("warning");
-    }
-    currWalkType = walkType;
-    updatePath();
-}
-document.getElementById("select-mesh").addEventListener("change", selectMeshHandler);
-document.getElementById("select-walk").addEventListener("change", selectWalkHandler);
-selectMesh((document.getElementById("select-mesh")).value);
-selectWalk((document.getElementById("select-walk")).value);
-
-
-/***/ }),
-/* 3 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", { value: true });
-const Geom = __webpack_require__(0);
-const Random = __webpack_require__(1);
-const seedRandom = Random.engines.nativeMath;
-// we like: [ 327293021, 1315541527 ]
-// problematic fillets: [ -1818373956, 310693458 ]
-/*
-const loopingSeeds: { [key: string]: boolean} = {}
-const failingSeeds: { [key: string]: boolean} = {}
-
-let n = 0
-while (true) {
-    n++
-    let seedArray: [number, number]
-    do {
-        seedArray = [seedRandom(), seedRandom()]
-    } while (failingSeeds[`${seedArray}`]||loopingSeeds[`${seedArray}`])
-    const random = new Random(Random.engines.mt19937().seedWithArray(seedArray));
-    try {
-        console.log(`iteration ${n}: generating with seed: ${seedArray}`)
-        randomFloorplan(random);
-    } catch (e) {
-        console.log(`exception for seed: ${seedArray}`)
-        throw e
-    }
-}
-*/
-/*
-for (let seedArrayString in failingSeeds) {
-    const seedArray: number[] = seedArrayString.split(",").map(parseInt)
-    const random = new Random(Random.engines.mt19937().seedWithArray(seedArray))
-    randomFloorplan(random)
-}*/
-//const seedArray = [seedRandom(), seedRandom()]
-//console.log(seedArray)
-//const random = new Random(Random.engines.mt19937().seedWithArray(seedArray))
-function randomFloorplanMesh(random, sprinkle) {
-    const floorplan1 = randomFloorplan(random);
-    const floorplan2 = randomFloorplan(random);
-    const angle2 = random.real((30 / 180) * Math.PI, (60 / 180) * Math.PI);
-    rotateFloorplan(floorplan2, angle2);
-    const interAxisRadius = random.real(10000, 12000);
-    const interAxisAngle = random.pick([(45 / 180) * Math.PI, (135 / 180) * Math.PI, (225 / 180) * Math.PI, (315 / 180) * Math.PI])
-        + random.real((-10 / 180) * Math.PI, (10 / 180) * Math.PI);
-    const delta1 = { x: Math.cos(interAxisAngle) * interAxisRadius, y: Math.sin(interAxisAngle) * interAxisRadius };
-    translateFloorplan(floorplan1, delta1);
-    const delta2 = Geom.mult(delta1, -1);
-    translateFloorplan(floorplan2, delta2);
-    const m = floorplans2mesh([floorplan1, floorplan2]);
-    if (sprinkle) {
-        const edges = Geom.gatherEdges(m);
-        const waitingList = [];
-        edges.forEach((ee) => { waitingList.push(ee); });
-        while (waitingList.length > 0) {
-            const ee = waitingList.pop();
-            const e = ee.half;
-            if (ee.constrained && e.twin && Geom.edgeLength(ee) > 3000) {
-                const v = Geom.splitEdgeApproximately(e, Geom.mult(Geom.plus(e.origin.pos, e.target.pos), .5));
-                waitingList.push(Geom.connected(e.origin, v));
-                waitingList.push(Geom.connected(v, e.target));
-            }
-        }
-        Geom.floodFill(m);
-        let e = m.north;
-        for (let x = -30000; x <= 30000; x += 1500) {
-            for (let y = -30000; y <= 30000; y += 1500) {
-                const p = { x: x + random.integer(-400, 400), y: y + random.integer(-400, 400) };
-                const f = Geom.walk(e, p);
-                e = f.some;
-                if (f.filled) {
-                    Geom.insertVertexFromEdge(e, p);
-                }
-            }
-        }
-    }
-    Geom.delaunafy(m);
-    return m;
-}
-exports.randomFloorplanMesh = randomFloorplanMesh;
-function randomFloorplan(random) {
-    const dim = 6;
-    const size = 30000;
-    const lines = randomLines(random, dim, size);
-    const bites = 4;
-    const pattern = randomPattern(random, dim, bites);
-    const floorplan = makeFloorplan(dim, lines, pattern);
-    simplifyFloorplan(floorplan);
-    const desiredFillets = 1;
-    let createdFillets = 0;
-    let tries = 0;
-    const maxTries = desiredFillets * 2;
-    while (tries < maxTries && createdFillets < desiredFillets) {
-        const corners = gatherStraightCorners(floorplan);
-        if (corners.length == 0) {
-            break;
-        }
-        random.shuffle(corners);
-        const corner = corners[0];
-        if (filletStraightCorner(floorplan, corner)) {
-            createdFillets++;
-        }
-        tries++;
-    }
-    return floorplan;
-}
-function floorplan2mesh(floorplan) {
-    return floorplans2mesh([floorplan]);
-}
-function floorplans2mesh(floorplans) {
-    const m = Geom.mesh();
-    floorplans.forEach((floorplan) => {
-        floorplan.edges.forEach((e) => {
-            Geom.draw(m, { p1: Geom.roundVec2(e.origin.pos), p2: Geom.roundVec2(e.target.pos) }, true, false);
-        });
-    });
-    Geom.delaunafy(m);
-    Geom.floodFill(m);
-    return m;
-}
-function cells2html(cells) {
-    return `<html>
-    <head>
-        <title>Floorplan</title>
-    </head>
-    <style>
-    html, body {
-        height: 100%;
-    }
-    #floorplan-div {
-        height: 100%;
-        min-height: 100%;
-	    display: flex;
-	    flex-direction: column;
-    }
-    #floorplan-svg {
-        display: flex;
-		flex-direction: column;
-        justify-content: center;
-    }
-    .floorplan-line {
-        font-size: 12px;
-        stroke-width:1;
-        stroke:rgb(0,0,0);
-    }
-    .floorplan-inside {
-        stroke:rgb(0,0,0);
-        stroke-width:100;
-        fill:rgb(0,0,180);
-    }
-    .floorplan-outside {
-        fill:rgb(255,255,255);
-    }    
-    </style>
-  </head>
-  <body>
-    <div id="floorplan-div">
-      ${cells2svg(cells)}
-    </div>
-  </body>
-</html>`;
-}
-function cells2svg(cells) {
-    return `<svg viewBox="-20000 -20000 40000 40000" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" version="1.1" id="floorplan-svg">
-    <defs>
-    </defs>
-    <g id="walls-layer">
-    </g>
-    <g id="solid-layer">
-        ${cells2svgSolid(cells)}
-    </g>
-</svg>`;
-}
-function rotateFloorplan(floorplan, angle) {
-    floorplan.vertices.forEach((vertex) => {
-        const p = vertex.pos;
-        vertex.pos = {
-            x: p.x * Math.cos(angle) - p.y * Math.sin(angle),
-            y: p.x * Math.sin(angle) + p.y * Math.cos(angle)
-        };
-    });
-}
-function translateFloorplan(floorplan, delta) {
-    floorplan.vertices.forEach((vertex) => {
-        const p = vertex.pos;
-        vertex.pos = Geom.plus(vertex.pos, delta);
-    });
-}
-function cells2svgSolid(cells) {
-    const lines = [];
-    cells.forEach((column) => {
-        column.forEach((cell) => {
-            let clss = "floorplan-outside";
-            if (cell.inside) {
-                clss = "floorplan-inside";
-            }
-            lines.push(`<rect class="${clss}" width="${cell.width}" height="${cell.height}" x="${cell.x}" y="${cell.y}"/>`);
-        });
-    });
-    return lines.join("\n");
-}
-function gatherStraightCorners(floorplan) {
-    const corners = [];
-    floorplan.edges.forEach((ie) => {
-        if (ie.target.outgoing.size != 1) {
-            return;
-        }
-        ie.target.outgoing.forEach((oe) => {
-            if (ie.origin.pos.x == ie.target.pos.x) {
-                if (oe.origin.pos.y == oe.target.pos.y) {
-                    if ((ie.origin.pos.y < ie.target.pos.y && oe.origin.pos.x > oe.target.pos.x)
-                        || (ie.origin.pos.y > ie.target.pos.y && oe.origin.pos.x < oe.target.pos.x)) {
-                        corners.push([ie, oe]);
-                    }
-                }
-            }
-            else if (ie.origin.pos.y == ie.target.pos.y) {
-                if (oe.origin.pos.x == oe.target.pos.x) {
-                    if ((ie.origin.pos.x < ie.target.pos.x && oe.origin.pos.y < oe.target.pos.y)
-                        || (ie.origin.pos.x > ie.target.pos.x && oe.origin.pos.y > oe.target.pos.y)) {
-                        corners.push([ie, oe]);
-                    }
-                }
-            }
-        });
-    });
-    return corners;
-}
-function filletStraightCorner(floorplan, corner) {
-    const [ie, oe] = corner;
-    const m = floorplan2mesh(floorplan);
-    const gieorigin = Geom.walkToClosestVertex(m.north, ie.origin.pos);
-    if (!Geom.pointsCoincide(gieorigin.pos, ie.origin.pos)) {
-        return false;
-    }
-    let gie = Geom.pivot(gieorigin, ie.target.pos);
-    if (!Geom.pointsCoincide(gie.origin.pos, ie.origin.pos) ||
-        !Geom.pointsCoincide(gie.target.pos, ie.target.pos)) {
-        return false;
-    }
-    const goeorigin = Geom.walkToClosestVertex(m.north, oe.origin.pos);
-    if (!Geom.pointsCoincide(goeorigin.pos, oe.origin.pos)) {
-        return false;
-    }
-    let goe = Geom.pivot(goeorigin, oe.target.pos);
-    if (!Geom.pointsCoincide(goe.origin.pos, oe.origin.pos) ||
-        !Geom.pointsCoincide(goe.target.pos, oe.target.pos)) {
-        return false;
-    }
-    const giel = Geom.halfEdgeLength(gie);
-    const goel = Geom.halfEdgeLength(goe);
-    const radius = Math.min(giel, goel);
-    let stepAngle = Math.PI / 8;
-    for (let c = 0; c < 6; c++) {
-        if ((stepAngle * radius) < 2000) {
-            break;
-        }
-        stepAngle = stepAngle / 2;
-    }
-    const angleEpsilon = stepAngle / 65536;
-    let startAngle = stepAngle;
-    let endAngle = (Math.PI / 2) - stepAngle;
-    let center;
-    let needle;
-    let coneedle;
-    if (giel <= goel) {
-        center = Geom.plus(gie.origin.pos, Geom.rotateLeft(Geom.halfEdgeDelta(gie)));
-        coneedle = Geom.minus(gie.origin.pos, center);
-        needle = Geom.rotateLeft(coneedle);
-        if (giel != goel) {
-            startAngle -= stepAngle;
-            const newoetargetpos = Geom.roundVec2(Geom.plus(center, needle));
-            const newoetarget = Geom.insertVertex(m, newoetargetpos);
-            if (!Geom.pointsCoincide(newoetarget.pos, newoetargetpos)) {
-                return false;
-            }
-            goe = Geom.pivot(goe.origin, newoetargetpos);
-            if (!Geom.pointsCoincide(goe.origin.pos, oe.origin.pos) ||
-                !Geom.pointsCoincide(goe.target.pos, newoetargetpos)) {
-                return false;
-            }
-        }
-    }
-    else {
-        center = Geom.plus(goe.target.pos, Geom.rotateLeft(Geom.halfEdgeDelta(goe)));
-        endAngle += stepAngle;
-        needle = Geom.minus(goe.target.pos, center);
-        coneedle = Geom.rotateRight(needle);
-        const newieoriginpos = Geom.roundVec2(Geom.plus(center, coneedle));
-        const newieorigin = Geom.insertVertex(m, newieoriginpos);
-        if (!Geom.pointsCoincide(newieorigin.pos, newieoriginpos)) {
-            return false;
-        }
-        gie = Geom.pivot(newieorigin, ie.target.pos);
-        if (!Geom.pointsCoincide(gie.origin.pos, newieoriginpos) ||
-            !Geom.pointsCoincide(gie.target.pos, ie.target.pos)) {
-            return false;
-        }
-    }
-    if (!gie.edge.constrained || !goe.edge.constrained) {
-        return false;
-    }
-    try {
-        Geom.flipToConnectVertices(gie.origin, goe.target);
-    }
-    catch (e) {
-        if (!e.message || (e.message != "intersecting existing vertex" && e.message != "intersecting constrained edge")) {
-            throw e;
-        }
-    }
-    Geom.floodFill(m);
-    if (!gie.left.filled || !gie.twin || gie.twin.left.filled) {
-        return false;
-    }
-    if (goe.next.next != gie || !goe.twin || goe.twin.left.filled) {
-        return false;
-    }
-    const filletPoints = [];
-    for (let angle = startAngle; ((endAngle - angle) > -angleEpsilon); angle += stepAngle) {
-        filletPoints.push(Geom.plus(Geom.plus(center, Geom.mult(needle, Math.sin(angle))), Geom.mult(coneedle, Math.cos(angle))));
-    }
-    // remove the corner (including, possibly, the vertex)
-    removeEdge(floorplan, ie);
-    removeEdge(floorplan, oe);
-    if (ie.target.incoming.size == 0 && ie.target.outgoing.size == 0) {
-        floorplan.vertices.delete(ie.target);
-    }
-    // substitute with the fillet
-    let currVertex = ie.origin;
-    filletPoints.forEach((p) => {
-        const nextVertex = newVertex(floorplan, p);
-        if (!Geom.pointsCoincide(currVertex.pos, nextVertex.pos)) {
-            newEdge(floorplan, currVertex, nextVertex);
-        }
-        currVertex = nextVertex;
-    });
-    if (!Geom.pointsCoincide(currVertex.pos, oe.target.pos)) {
-        newEdge(floorplan, currVertex, oe.target);
-    }
-    return true;
-}
-function newFloorplan() {
-    return { edges: new Set(), vertices: new Set() };
-}
-function newVertex(floorplan, p) {
-    const vertex = { pos: p, incoming: new Set(), outgoing: new Set() };
-    floorplan.vertices.add(vertex);
-    return vertex;
-}
-function newEdge(floorplan, origin, target) {
-    if (Geom.pointsCoincide(origin.pos, target.pos)) {
-        throw "origin and target coincide";
-    }
-    const edge = { origin: origin, target: target };
-    floorplan.edges.add(edge);
-    origin.outgoing.add(edge);
-    target.incoming.add(edge);
-}
-function removeEdge(floorplan, e) {
-    e.origin.outgoing.delete(e);
-    e.target.incoming.delete(e);
-    floorplan.edges.delete(e);
-}
-function simplifyFloorplan(floorplan) {
-    const waitingList = [];
-    const waitingSet = new Set();
-    function scheduleVertex(v) {
-        if (!waitingSet.has(v)) {
-            waitingList.push(v);
-            waitingSet.add(v);
-        }
-    }
-    floorplan.vertices.forEach((v) => { scheduleVertex(v); });
-    while (waitingList.length > 0) {
-        const vertex = waitingList.pop();
-        waitingSet.delete(vertex);
-        const colinearPairs = [];
-        vertex.incoming.forEach((ie) => {
-            vertex.outgoing.forEach((oe) => {
-                if (Geom.orient(ie.origin.pos, vertex.pos, oe.target.pos) == 0) {
-                    colinearPairs.push([ie, oe]);
-                }
-            });
-        });
-        colinearPairs.forEach((pair) => {
-            const [ie, oe] = pair;
-            removeEdge(floorplan, ie);
-            removeEdge(floorplan, oe);
-            newEdge(floorplan, ie.origin, oe.target);
-            scheduleVertex(ie.origin);
-            scheduleVertex(oe.target);
-        });
-        if (vertex.incoming.size == 0 && vertex.outgoing.size == 0) {
-            floorplan.vertices.delete(vertex);
-        }
-    }
-}
-function makeFloorplan(dim, lines, pattern) {
-    const [hor, ver] = lines;
-    const floorplan = newFloorplan();
-    const vertexGrid = [];
-    for (let h = 0; h <= dim; h++) {
-        const column = [];
-        vertexGrid.push(column);
-        for (let v = 0; v <= dim; v++) {
-            const vertex = newVertex(floorplan, { x: hor[h], y: ver[v] });
-            column.push(vertex);
-        }
-    }
-    for (let h = 0; h < dim; h++) {
-        for (let v = 0; v < dim; v++) {
-            if (!pattern[h][v]) {
-                continue;
-            }
-            if (v == 0 || !(pattern[h][v - 1])) {
-                newEdge(floorplan, vertexGrid[h][v], vertexGrid[h + 1][v]);
-            }
-            if (h == dim - 1 || !(pattern[h + 1][v])) {
-                newEdge(floorplan, vertexGrid[h + 1][v], vertexGrid[h + 1][v + 1]);
-            }
-            if (v == dim - 1 || !(pattern[h][v + 1])) {
-                newEdge(floorplan, vertexGrid[h + 1][v + 1], vertexGrid[h][v + 1]);
-            }
-            if (h == 0 || !(pattern[h - 1][v])) {
-                newEdge(floorplan, vertexGrid[h][v + 1], vertexGrid[h][v]);
-            }
-        }
-    }
-    return floorplan;
-}
-function makeCells(dim, lines, pattern) {
-    const [hor, ver] = lines;
-    const cells = [];
-    for (let h = 0; h < dim; h++) {
-        const column = [];
-        cells.push(column);
-        for (let v = 0; v < dim; v++) {
-            const cell = {
-                x: hor[h], y: ver[v],
-                width: hor[h + 1] - hor[h], height: ver[v + 1] - ver[v],
-                inside: pattern[h][v]
-            };
-            column.push(cell);
-        }
-    }
-    return cells;
-}
-function randomPattern(random, dim, bites) {
-    if (dim < 6) {
-        throw Error("dim must be 6 or greater");
-    }
-    const pattern = [];
-    for (let h = 0; h < dim; h++) {
-        const column = [];
-        pattern.push(column);
-        for (let v = 0; v < dim; v++) {
-            column.push(true);
-        }
-    }
-    for (let b = 0; b < bites; b++) {
-        let h;
-        let v;
-        if (random.bool()) {
-            // pick a corner
-            if (random.bool()) {
-                h = 0;
-            }
-            else {
-                h = dim - 1;
-            }
-            if (random.bool()) {
-                v = 0;
-            }
-            else {
-                v = dim - 1;
-            }
-        }
-        else if (random.bool()) {
-            // pick a sidepoint
-            if (random.bool()) {
-                // top or bottom
-                if (random.bool()) {
-                    // top
-                    v = 0;
-                    h = 2 + random.integer(0, dim - 4);
-                }
-                else {
-                    // bottom
-                    v = dim - 1;
-                    h = 2 + random.integer(0, dim - 4);
-                }
-            }
-            else {
-                // left or right
-                if (random.bool()) {
-                    // left
-                    h = 0;
-                    v = 2 + random.integer(0, dim - 4);
-                }
-                else {
-                    // right
-                    h = dim - 1;
-                    v = 2 + random.integer(0, dim - 4);
-                }
-            }
-        }
-        else {
-            // pick an interior point
-            h = 2 + random.integer(0, dim - 4);
-            v = 2 + random.integer(0, dim - 4);
-        }
-        for (let c = 0; c <= b; c++) {
-            if (h < 0 || h > dim - 1 || v < 0 || v > dim - 1) {
-                break;
-            }
-            if (!pattern[h][v]) {
-                break;
-            }
-            pattern[h][v] = false;
-            // step hor or ver
-            if (random.bool()) {
-                if (random.bool()) {
-                    h -= 1;
-                }
-                else {
-                    h += 1;
-                }
-            }
-            else {
-                if (random.bool()) {
-                    v -= 1;
-                }
-                else {
-                    v += 1;
-                }
-            }
-        }
-    }
-    return pattern;
-}
-function randomLines(random, dim, size) {
-    const halfSize = Math.round(size / 2);
-    const horWeights = [];
-    let totHorWeight = 0;
-    for (let c = 0; c <= dim; c++) {
-        const weight = random.integer(40, 200);
-        horWeights.push(weight);
-        totHorWeight += weight;
-    }
-    const hor = [];
-    let x = -halfSize;
-    for (let c = 0; c <= dim; c++) {
-        x += size * (horWeights[c] / totHorWeight);
-        hor.push(Math.round(x));
-    }
-    const verWeights = [];
-    let totVerWeight = 0;
-    for (let c = 0; c <= dim; c++) {
-        const weight = horWeights[c] + random.integer(-20, 60);
-        verWeights.push(weight);
-        totVerWeight += weight;
-    }
-    const ver = [];
-    let y = -halfSize;
-    for (let c = 0; c <= dim; c++) {
-        y += size * (verWeights[c] / totVerWeight);
-        ver.push(Math.round(y));
-    }
-    return [hor, ver];
-}
-
 
 /***/ })
 /******/ ]);

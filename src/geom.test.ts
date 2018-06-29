@@ -162,55 +162,6 @@ describe('mesh', () => {
         }
     });
 
-    it('boundary splitting', () => {
-        {
-            const m = Geom.mesh();
-            Geom.triangulateMesh(m)
-            const ne = m.north.origin.pos
-            const nw = m.north.target.pos
-            const n = Geom.mult(Geom.plus(ne, nw), .5) // halfway on north edge
-            Geom.splitBoundaryEdgeInTriangularMesh(m, m.north, n)
-            expect(m.north.origin.pos).to.deep.equal(n)
-            expect(m.north.target.pos).to.deep.equal(nw)
-            expect(m.north.prev.twin!.prev.target.pos).to.deep.equal(n)
-            expect(m.north.prev.twin!.prev.origin.pos).to.deep.equal(ne)
-            expect(m.north.next.next.next).to.equal(m.north)
-            expect(m.north.prev.twin!.next.next.next).to.equal(m.north.prev.twin!)
-            expect(m.north.prev.twin!.prev.prev.prev).to.equal(m.north.prev.twin!)
-            expect(m.north.edge.half).to.equal(m.north)
-            expect(m.north.left.some.left).to.equal(m.north.left)
-        }
-        {
-            const m = Geom.mesh();
-            const ne = m.north.origin.pos
-            const nw = m.north.target.pos
-            const n = Geom.mult(Geom.plus(ne, nw), .5) // halfway on north edge
-            Geom.splitBoundaryEdgeInConvexMesh(m, m.north, n)
-            expect(m.north.origin.pos).to.deep.equal(n)
-            expect(m.north.target.pos).to.deep.equal(nw)
-            expect(m.north.prev.target.pos).to.deep.equal(n)
-            expect(m.north.prev.origin.pos).to.deep.equal(ne)
-            expect(m.north.next.next.next.next.next).to.equal(m.north)
-            expect(m.north.prev.prev.prev.prev.prev).to.equal(m.north)
-            expect(m.north.edge.half).to.equal(m.north)
-            expect(m.north.left.some.left).to.equal(m.north.left)
-        }
-        {
-            const m = Geom.mesh(1);
-            expect(m.north.next.next.next.next).to.not.equal(m.north)
-            expect(m.north.next.next.next.next.next.next.next.next).to.equal(m.north)
-            expect(m.north.prev.prev.prev.prev.prev.prev.prev.prev).to.equal(m.north)
-            expect(m.north.edge.half).to.equal(m.north)
-            expect(m.north.left.some.left).to.equal(m.north.left)
-        } {
-            const m = Geom.mesh(1);
-            Geom.triangulateMesh(m);
-        } {
-            const m = Geom.mesh(2);
-            Geom.triangulateMesh(m);
-        }
-    });
-
     it('constraining', () => {
         {
             const m = Geom.mesh();
@@ -350,9 +301,6 @@ describe('mesh', () => {
             //Geom.delaunafy(m)
             Geom.floodFill(m)
             Geom.convexify(m)
-
-            // TOOD: add conditions
-            fs.writeFileSync("/tmp/drawn.html", Geom.mesh2html("drawn", m, undefined, undefined, undefined, true))
         }
     });
 

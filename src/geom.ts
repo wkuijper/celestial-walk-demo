@@ -1,9 +1,3 @@
-import * as Random from 'random-js';
-import { randomFloorplanMesh } from './floorplan';
-
-const mersenne = Random.engines.mt19937()
-mersenne.seed(1111)
-
 export type Vec2 = { x: number, y: number }
 
 export type Line = { p1: Vec2, p2: Vec2 }
@@ -28,15 +22,16 @@ export type Vertex = { pos: Vec2, outgoing: HalfEdge }
 
 export type Face = { some: HalfEdge, filled: boolean }
 
-export type MeshType = "Convex" | "Thin" | "Delaunay" | "Symmetric" | "Floorplan"
+//1035
+export const MIN_MESH_COORD = -65535
+export const MAX_MESH_COORD = 65535
+export const MESH_SIZE = MAX_MESH_COORD-MIN_MESH_COORD
 
-export type WalkType = "Straight" | "Visibility" | "Celestial"
-
-export function mesh(boundarySplits: number = 0): Mesh {
-    let nw = { pos: { x: -65536, y: +65536 } } as Vertex
-    let ne = { pos: { x: +65536, y: +65536 } } as Vertex
-    let se = { pos: { x: +65536, y: -65536 } } as Vertex
-    let sw = { pos: { x: -65536, y: -65536 } } as Vertex
+export function mesh(): Mesh {
+    let nw = { pos: { x: MIN_MESH_COORD-1, y: MAX_MESH_COORD+1 } } as Vertex
+    let ne = { pos: { x: MAX_MESH_COORD+1, y: MAX_MESH_COORD+1 } } as Vertex
+    let se = { pos: { x: MAX_MESH_COORD+1, y: MIN_MESH_COORD-1 } } as Vertex
+    let sw = { pos: { x: MIN_MESH_COORD-1, y: MIN_MESH_COORD-1 } } as Vertex
     let n = { obtuse: false, origin: ne, target: nw, fill: false } as HalfEdge
     let e = { obtuse: false, origin: se, target: ne, fill: false } as HalfEdge
     let s = { obtuse: false, origin: sw, target: se, fill: false } as HalfEdge
@@ -51,22 +46,6 @@ export function mesh(boundarySplits: number = 0): Mesh {
     let f = { some: n, filled: false } as Face
     n.left = f; e.left = f; s.left = f; w.left = f
     let m = { north: n } as Mesh
-    function splitBoundary(boundary: HalfEdge[]) {
-        let nextBoundary: HalfEdge[] = []
-        boundary.forEach((e) => {
-            const sum = plus(e.origin.pos, e.target.pos)
-            if ((sum.x % 2) != 0 || (sum.y % 2) != 0) {
-                throw { geom: true, message: "splitting boundary produces non-integer coordinate" }
-            }
-            const p = { x: sum.x >> 1, y: sum.y >> 1 }
-            splitBoundaryEdgeInConvexMesh(m, e, p).forEach((e) => { nextBoundary.push(e) })
-        })
-        return nextBoundary
-    }
-    let boundary = [n, e, s, w]
-    for (let c = 0; c < boundarySplits; c++) {
-        boundary = splitBoundary(boundary)
-    }
     return m
 }
 
@@ -137,10 +116,6 @@ export function roundVec2(p: Vec2) {
     return { x: Math.round(p.x), y: Math.round(p.y) }
 }
 
-export function approxBisectorNext(e2: HalfEdge): Line {
-    let e3: HalfEdge = e2.next
-    return lineByPointAndDir(e2.target.pos, rotateRight(minus(e3.target.pos, e2.origin.pos)))
-}
 
 export function computeObtuseness(e2: HalfEdge) {
     let e3 = e2.next
@@ -407,6 +382,11 @@ export function walkToClosestVertex(einit: HalfEdge, p: Vec2): Vertex {
     return clv
 }
 
+export function approxBisectorNext(e2: HalfEdge): Line {
+    let e3: HalfEdge = e2.next
+    return lineByPointAndDir(e2.target.pos, rotateRight(minus(e3.target.pos, e2.origin.pos)))
+}
+
 export function walk(einit: HalfEdge, p: Vec2): Face {
     let e: HalfEdge = einit
     if (strictlyRightOf(line(e), p)) {
@@ -487,23 +467,10 @@ export function delaunafy(m: Mesh) {
     }
 }
 
-export function shuffle(array: any[]) {
-    let m = array.length, t, i;
-    while (m) {
-        m -= 1
-        i = Random.integer(0, m)(mersenne);
-        t = array[m];
-        array[m] = array[i];
-        array[i] = t;
-    }
-    return array;
-}
-
 export function convexify(m: Mesh, deeply: boolean = false) {
     // pre: m must be triangular
     // post: m will (almost certainly?) no longer be triangular but still convex
     delaunafy(m)
-    // shallow convexification: eliminate triangles based on local criterion
     let triangles: Set<Face> = gatherFaces(m)
     let waiting: Face[] = []
     let deleted = (e: HalfEdge): boolean => {
@@ -519,7 +486,6 @@ export function convexify(m: Mesh, deeply: boolean = false) {
         return false
     }
     triangles.forEach((f) => { waiting.push(f) })
-    //shuffle(waiting)
     while (waiting.length > 0) {
         let e: HalfEdge = waiting.pop()!.some
         if (!triangles.has(e.left)) {
@@ -535,484 +501,6 @@ export function convexify(m: Mesh, deeply: boolean = false) {
             continue
         }
     }
-    // deeper convexification: eliminate edges based on global criterion
-    // this operation is potentially very expensive, it is only to be used on sparse meshes
-    if (!deeply) {
-        return
-    }
-    function canEliminate(ee: Edge): boolean {
-        const estart = ee.half.prev
-        let e = estart
-        do {
-            let enext = e.next
-            if (enext.edge == ee) {
-                enext = enext.twin!.next
-            }
-            if (!leftOrOnTopOf(line(e), enext.target.pos)) {
-                return false
-            }
-            e = enext
-        } while (e != estart)
-        return true
-    }
-    let edges = gatherEdges(m)
-    edges.forEach((ee) => {
-        if (!ee.constrained && ee.half.twin && canEliminate(ee)) {
-            deleteEdge(ee.half)
-        }
-    })
-}
-
-export type WalkStats = { orient_tests: number, path: HalfEdge[] }
-
-export function celestialWalkStats(einit: HalfEdge, p: Vec2): WalkStats {
-    let tests: number = 0
-    let e: HalfEdge = einit
-    let path: HalfEdge[] = [e]
-    if (++tests && strictlyRightOf(line(e), p)) {
-        if (!e.twin) {
-            throw { geom: true, message: "out of bounds" }
-        }
-        e = e.twin
-        path.push(e)
-    }
-    let e2: HalfEdge = e.next
-    while (e !== e2) {
-        if (++tests && strictlyRightOf(line(e2), p)) {
-            while (e2.obtuse && (++tests && leftOrOnTopOf(approxBisectorNext(e2), p))) {
-                e2 = e2.next
-            }
-            if (!e2.twin) {
-                throw { geom: true, message: "out of bounds" }
-            }
-            e = e2.twin
-            path.push(e)
-            e2 = e.next
-        } else {
-            e2 = e2.next
-        }
-    }
-    return { orient_tests: tests, path: path }
-}
-
-export function visibilityWalkStats(einit: HalfEdge, p: Vec2): WalkStats {
-    let tests: number = 0
-    let e: HalfEdge = einit
-    let path: HalfEdge[] = [e]
-    if (++tests && strictlyRightOf(line(e), p)) {
-        if (!e.twin) {
-            throw { geom: true, message: "out of bounds" }
-        }
-        e = e.twin
-        path.push(e)
-    }
-    let e2: HalfEdge = e.next
-    while (e !== e2) {
-        if (++tests && strictlyRightOf(line(e2), p)) {
-            if (!e2.twin) {
-                throw { geom: true, message: "out of bounds" }
-            }
-            e = e2.twin
-            path.push(e)
-            e2 = e.next
-        } else {
-            e2 = e2.next
-        }
-    }
-    return { orient_tests: tests, path: path }
-}
-
-export function straightWalkStats(einit: HalfEdge, p1: Vec2, p2: Vec2): WalkStats {
-    let tests: number = 0
-    let e: HalfEdge = einit
-    let path: HalfEdge[] = [e]
-    let vertexOrientCache: Map<Vertex, number> = new Map()
-    // NOTE: Dynamic programming is used here to ensure we get
-    // the absolutely optimal implementation in terms of the
-    // number of orientation tests. In practice one would need
-    // to unroll the code significantly in order to eliminate 
-    // the dynamic lookups without incurring superfluous 
-    // orientation tests. We haven't done so here because that
-    // would lead to a lot of implementation complexity, hard
-    // to read code, bugs etc.
-    // As a result, this code is fair ONLY when comparing
-    // based on the number of orientation tests, NOT when 
-    // comparing based on wall-clock time.
-    let vertexOrient = (v: Vertex): number => {
-        if (!vertexOrientCache.has(v)) {
-            tests++
-            vertexOrientCache.set(v, orient(p1, p2, v.pos))
-        }
-        return vertexOrientCache.get(v)!
-    }
-    let vertexLeft = (v: Vertex): boolean => {
-        return vertexOrient(v) >= 0
-    }
-    let vertexRight = (v: Vertex): boolean => {
-        return vertexOrient(v) <= 0
-    }
-    let e2: HalfEdge = e
-    do {
-        if (++tests && strictlyRightOf(line(e2), p2)) {
-            while (!(vertexRight(e2.origin) && vertexLeft(e2.target))) {
-                e2 = e2.next
-            }
-            if (!e2.twin) {
-                throw { geom: true, message: "out of bounds" }
-            }
-            e = e2.twin
-            path.push(e)
-            e2 = e.next
-        } else {
-            e2 = e2.next
-        }
-    } while (e2 !== e)
-    return { orient_tests: tests, path: path }
-}
-
-export function walkStats(walkType: WalkType, initEdge: HalfEdge, p1: Vec2, p2: Vec2): WalkStats {
-    if (walkType == "Celestial") {
-        return celestialWalkStats(initEdge, p2)
-    } else if (walkType == "Straight") {
-        return straightWalkStats(initEdge, p1, p2)
-    }
-    // (walkType == "Visibility")
-    return visibilityWalkStats(initEdge, p2)
-}
-
-export function mesh2html(title: string, m: Mesh, delaunayFaces?: boolean, walkStats?: WalkStats, line?: Line, showAll?: boolean): string {
-    return `<html>
-  <head>
-    <title>
-      ${title}
-    </title>
-    <style>
-    html, body {
-        height: 95%;
-    }
-    #mesh-div {
-        height: 100%;
-        min-height: 100%;
-	    display: flex;
-        flex-direction: column;
-        padding: 20pt;
-    }
-    #mesh-svg {
-        display: flex;
-		flex-direction: column;
-        justify-content: center;
-        border:2px;
-        border-style: solid;
-    }
-    </style>
-  </head>
-  <body>
-    <div id="mesh-div">
-        ${mesh2svg(m, delaunayFaces, walkStats, line, showAll)}
-    </div>
-  </body>
-</html>`
-}
-
-export function face2svg(face: Face, clss: string): string {
-    const p: Vec2 = face.some.origin.pos
-    const words: string[] = [`<path class="${clss}" d="M ${p.x} ${p.y}`]
-    gatherFaceEdges(face).forEach((e: HalfEdge) => {
-        const p: Vec2 = e.target.pos
-        words.push(` L ${p.x} ${p.y}`)
-    })
-    words.push('"/>')
-    return words.join("")
-}
-
-export function mesh2svg(m: Mesh, delaunayFaces?: boolean, walkStats?: WalkStats, line?: Line, showAll?: boolean): string {
-    function meshFaceLayer(): string {
-        const lines: string[] = []
-        const faces = gatherFaces(m)
-        faces.forEach((f) => {
-            lines.push(face2svg(f, f.filled ? "mesh-filled-face" : "mesh-face"))
-        })
-        return lines.join('\n')
-    }
-    function delaunayLayer(): string {
-        if (!delaunayFaces) {
-            return ""
-        }
-        const lines: string[] = []
-        gatherFaces(m).forEach((f) => {
-            if (isDelaunayTriangle(f)) {
-                lines.push(face2svg(f, "delaunay-face"))
-            }
-        })
-        return lines.join('\n')
-    }
-    function meshLineLayer(): string {
-        const lines: string[] = []
-        const edges = gatherEdges(m)
-        edges.forEach((e) => {
-            const p1 = e.half.origin.pos
-            const p2 = e.half.target.pos
-            lines.push(`<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" class="${e.constrained ? "mesh-constrained-line" : "mesh-line"}"/>`)
-        })
-        return lines.join('\n')
-    }
-    function pathLayer(): string {
-        if (!walkStats) {
-            return ""
-        }
-        const lines: string[] = []
-        const path = walkStats.path
-        path.forEach((e) => {
-            const p1 = e.origin.pos
-            const p2 = e.target.pos
-            lines.push(`<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" class="path-edge"/>`)
-            lines.push(face2svg(e.left, "path-face"))
-        })
-        return lines.join('\n')
-    }
-    function arrowLayer(): string {
-        if (!line) {
-            return ""
-        }
-        const p1 = line.p1
-        const p2 = line.p2
-        return `<circle cx="${p1.x}" cy="${p1.y}" r="5" id="arrow-origin"/>
-            ${p2 ? `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" id="arrow" marker-end="url(#arrow-head)"/>` : ""}`
-    }
-    return `<svg viewBox="${showAll ? "-80000 -80000 160000 160000" : "-22000 -22000 44000 44000"}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" version="1.1" id="mesh-svg">
-    <style type="text/css">
-    .mesh-line {
-        stroke-width:100;
-        stroke:rgb(100,100,100);
-    }
-    .mesh-constrained-line {
-        stroke-width:200;
-        stroke:rgb(50,50,50);
-    }
-    #arrow {
-        stroke-width:200;
-        stroke:rgb(0,0,200);
-    }
-    #arrow-head {
-        fill:rgb(0,0,200);
-    }
-    #arrow-origin {
-        fill:rgb(0,0,200);
-    }
-    .mesh-face {
-        fill:rgb(255,255,255);
-    }
-    .mesh-filled-face {
-        fill:rgb(200, 200, 200);
-    }
-    .path-face {
-        fill:rgba(100, 200, 100,0.5);
-    }
-    .delaunay-face {
-        fill:rgba(200, 200, 100,0.3);
-    }
-    .path-edge {
-        stroke-width:300;
-        stroke:rgba(150,0,200,0.5); 
-    }
-    </style>
-    <defs>
-        <marker id="arrow-head" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
-            <path d="M0,0 L0,6 L9,3 z" class="arrowhead"/>
-        </marker>
-    </defs>
-    <g id="mesh-face-layer">
-        ${meshFaceLayer()}
-    </g>    
-    <g id="delaunay-layer">
-        ${delaunayLayer()}
-    </g>
-    <g id="mesh-line-layer">
-        ${meshLineLayer()}
-    </g>
-    <g id="path-layer">
-        ${pathLayer()}
-    </g>
-    <g id="arrow-layer">
-        ${arrowLayer()}
-    </g>
-</svg>`
-}
-
-const randomPointDistribution = Random.integer(-64500, 64500)
-
-export function randomPoint(): Vec2 {
-    let x: number = randomPointDistribution(mersenne);
-    let y: number = randomPointDistribution(mersenne);
-    return { x: x, y: y }
-}
-
-export function randomPointCloud(n: number): Vec2[] {
-    const pointCloud: Vec2[] = []
-    for (var i = 0; i < n; i++) {
-        pointCloud.push(randomPoint())
-    }
-    return pointCloud
-}
-
-export function randomMesh(meshType: MeshType, boundarySplits: number = -1): Mesh {
-    if (meshType == "Floorplan") {
-        let m: Mesh|undefined
-        while (!m) {
-            const random = new Random(Random.engines.nativeMath)
-            try {
-                m = randomFloorplanMesh(random, true)
-            } catch (e) {
-                if (!e.geom) {
-                    throw e
-                }
-            }
-        }
-        return m
-    }
-    return meshFromPointCloud(meshType, randomPointCloud(200), boundarySplits)
-}
-
-export function perturb(m: Mesh) {
-    for (let c = 0; c < 1000; c++) {
-        const f = walk(m.north, randomPoint())
-        if (!f) {
-            continue
-        }
-        if (f.some.twin && flipableEdge(f.some)) {
-            flipEdge(f.some)
-        } else if (f.some.next.twin && flipableEdge(f.some.next)) {
-            flipEdge(f.some.next)
-        } else if (f.some.next.next.twin && flipableEdge(f.some.next.next)) {
-            flipEdge(f.some.next.next)
-        }
-    }
-}
-
-export function initialMesh(meshType: MeshType, boundarySplits: number = -1): Mesh {
-    if (boundarySplits < 0) {
-        boundarySplits = 0
-        if (meshType == "Symmetric") {
-            boundarySplits = 5
-        }
-    }
-    let m = mesh(boundarySplits)
-    if (meshType == "Symmetric") {
-        insertVertex(m, { x: 0, y: 0 })
-        let e = m.north
-        let a = 0
-        const r = 65536
-        do {
-            e.origin.pos = { x: Math.sin(a) * r, y: Math.cos(a) * r }
-            a = a - Math.PI / 64
-            e = e.next.twin!.next
-        } while (e != m.north)
-        e = m.north
-        do {
-            precomputeObtuseness(e)
-            precomputeObtuseness(e.next)
-            precomputeObtuseness(e.next.next)
-        } while (e != m.north)
-        //delaunafy(m)
-    } else {
-        triangulateMesh(m)
-    }
-    return m
-}
-
-export function fillMeshFromPointCloud(m: Mesh, meshType: MeshType, pointCloud: Vec2[]) {
-    if (meshType == "Symmetric") {
-        pointCloud = pointCloud.filter(((p) => Math.sqrt((p.x * p.x) + (p.y * p.y)) < 65536))
-    }
-    pointCloud.forEach((p: Vec2) => {
-        insertVertex(m, p)
-    })
-    if (meshType == "Thin") {
-        // do nothing
-    } else if (meshType == "Delaunay" || meshType == "Symmetric") {
-        delaunafy(m)
-    } else if (meshType == "Convex") {
-        delaunafy(m)
-        convexify(m)
-    }
-    return m
-}
-
-export function meshFromPointCloud(meshType: MeshType, pointCloud: Vec2[], boundarySplits: number = -1): Mesh {
-    const m = initialMesh(meshType, boundarySplits)
-    fillMeshFromPointCloud(m, meshType, pointCloud)
-    return m
-}
-
-export function splitBoundaryEdgeInConvexMesh(m: Mesh, e: HalfEdge, p: Vec2): [HalfEdge, HalfEdge] {
-    // pre: m must be convex, p must be on e, t.twin must be undefined (i.e.: e must be a boundary edge)
-    // post: m will be convex, e split in two with a vertex at p
-    const en = e.next
-    const ep = e.prev
-
-    const v: Vertex = { pos: p } as Vertex
-
-    const er: HalfEdge = { origin: e.origin, target: v, prev: ep, left: e.left } as HalfEdge
-    const el: HalfEdge = { origin: v, target: e.target, prev: er, next: en, left: e.left } as HalfEdge
-    er.next = el; e.left.some = el
-
-    en.prev = el; ep.next = er
-
-    const eel: Edge = e.edge; el.edge = eel; eel.half = el
-    const eer: Edge = { half: er, constrained: true }; er.edge = eer
-
-    v.outgoing = el; e.origin.outgoing = er
-
-    precomputeObtusenessForNewHalfEdge(er)
-    precomputeObtusenessForNewHalfEdge(el)
-
-    if (m.north == e) {
-        m.north = el
-    }
-
-    return [el, er]
-}
-
-export function splitBoundaryEdgeInTriangularMesh(m: Mesh, e: HalfEdge, p: Vec2): [HalfEdge, HalfEdge] {
-    // pre: m must be triangular, p must be on e, t.twin must be undefined (i.e.: e must be a boundary edge)
-    // post: m will be triangular, e and e.left split in two with a vertex at p
-    const en = e.next
-    const ep = e.prev
-
-    const v: Vertex = { pos: p } as Vertex
-
-    const er: HalfEdge = { origin: e.origin, target: v, prev: ep } as HalfEdge
-    const el: HalfEdge = { origin: v, target: e.target, next: en } as HalfEdge
-    const ern: HalfEdge = { origin: er.target, target: ep.origin, prev: er, next: ep } as HalfEdge
-    er.next = ern
-    const elp: HalfEdge = { origin: en.target, target: el.origin, prev: en, next: el } as HalfEdge
-    el.prev = elp
-    elp.twin = ern; ern.twin = elp
-
-    en.prev = el; en.next = elp
-    ep.prev = ern; ep.next = er
-
-    const eel: Edge = e.edge; el.edge = eel; eel.half = el
-    const eer: Edge = { half: er, constrained: true }; er.edge = eer
-    const ee: Edge = { half: ern, constrained: false }; ern.edge = ee; elp.edge = ee
-
-    const fl = e.left; fl.some = el
-    const fr = { some: er } as Face
-    el.left = fl; en.left = fl; elp.left = fl
-    er.left = fr; ern.left = fr; ep.left = fr
-
-    v.outgoing = el; e.origin.outgoing = er
-
-    precomputeObtusenessForNewHalfEdge(er)
-    precomputeObtusenessForNewHalfEdge(ern)
-    precomputeObtusenessForNewHalfEdge(elp)
-    precomputeObtusenessForNewHalfEdge(el)
-
-    if (m.north == e) {
-        m.north = el
-    }
-
-    return [el, er]
 }
 
 export function vec2String(p: Vec2): string {

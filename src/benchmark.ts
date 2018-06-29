@@ -1,7 +1,6 @@
-import * as Geom from './geom';
+/*import * as Geom from './geom';
 import * as fs from 'fs';
 import { stat } from 'fs/promises';
-
 
 type ArrowType = 0|45|90|135|180|225|270
 
@@ -507,7 +506,7 @@ meshTypes.forEach((meshType) => {
         drawGraph(sortedData, primitives)
         fs.writeFileSync("./benchmarks/output/graphs/" + name3 + ".html", primitives2html(name3, primitives))
     })
-})
+})*/
 
 
 

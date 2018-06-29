@@ -1,10 +1,41 @@
-import * as Geom from './geom';
+import {treatedAll} from './common'
+import * as Geom from './geom'
+import * as Pointcloud from './pointcloud'
+import * as Floorplan from './floorplan'
+import * as Walk from './walk'
+import * as Render from './render'
+import * as Random from 'random-js'
+
+type MeshType = "Delaunay Pointcloud"|"Thintriangles Pointcloud"|"Convex Pointcloud"|"Delaunayish Floorplan"|"Convex Floorplan"|"Subdivided Floorplan"
+const meshTypes: MeshType[] = ["Delaunay Pointcloud", "Thintriangles Pointcloud", "Convex Pointcloud", "Delaunayish Floorplan", "Convex Floorplan", "Subdivided Floorplan"]
+
+type WalkType = "Straight"|"Visibility"|"Celestial"
+const walkTypes: WalkType[] = ["Straight", "Visibility", "Celestial"]
+
+const random = new Random(Random.engines.nativeMath)
+
+function randomMesh(meshType: MeshType): Geom.Mesh {
+    if (meshType == "Delaunay Pointcloud") {
+        return Pointcloud.randomMesh(random, "Delaunay")
+    } else if (meshType == "Thintriangles Pointcloud") {
+        return Pointcloud.randomMesh(random, "Thin")
+    } else if (meshType == "Convex Pointcloud") {
+        return Pointcloud.randomMesh(random, "Convex")
+    } else if (meshType == "Delaunayish Floorplan") {
+        return Floorplan.randomMesh(random, false, false)
+    } else if (meshType == "Convex Floorplan") {
+        return Floorplan.randomMesh(random, false, true)
+    } else if (meshType == "Subdivided Floorplan") {
+        return Floorplan.randomMesh(random, true, false)
+    }
+    return treatedAll(meshType)
+}
 
 let currMesh: Geom.Mesh|undefined
-let currMeshType: Geom.MeshType|undefined
+let currMeshType: MeshType|undefined
 
 function selectMeshHandler(this: HTMLElement, ev: Event) {
-    selectMesh(<Geom.MeshType>(<HTMLSelectElement>this).value)
+    selectMesh(<MeshType>(<HTMLSelectElement>this).value)
 }
 
 let meshSVG: SVGSVGElement;
@@ -13,7 +44,7 @@ let arrowOrigin: Geom.Vec2|null = null;
 let arrowTarget: Geom.Vec2|null = null;
 let pathLayer: SVGGElement|undefined;
 
-function selectMesh(meshType: Geom.MeshType) {
+function selectMesh(meshType: MeshType) {
     if (currMeshType && meshType == currMeshType) {
         return
     }
@@ -21,15 +52,15 @@ function selectMesh(meshType: Geom.MeshType) {
     document.getElementById("status-div")!.innerHTML = ''
     document.getElementById("select-mesh")!.classList.remove("warning")
     document.getElementById("select-walk")!.classList.remove("warning")
-    if (currWalkType == "Visibility" && (meshType != "Delaunay")) {
+    if (currWalkType == "Visibility" && (!meshType.includes("Delaunay"))) {
         document.getElementById("status-div")!.innerHTML = '<span class="warning">This combination may loop!</span>'
         document.getElementById("select-walk")!.classList.add("warning")
     }
 
-    currMeshType = <Geom.MeshType>meshType
-    currMesh = Geom.randomMesh(currMeshType)
+    currMeshType = <MeshType>meshType
+    currMesh = randomMesh(currMeshType)
     let meshDIV = document.getElementById("mesh-div")!
-    meshDIV.innerHTML = Geom.mesh2svg(currMesh)
+    meshDIV.innerHTML = Render.mesh2svg(currMesh)
 
     meshSVG = document.getElementById("mesh-svg")! as any as SVGSVGElement
 
@@ -55,13 +86,13 @@ function meshSVGEventPos(evt: MouseEvent): Geom.Vec2 {
 }
 
 let currPathInitFace: Geom.Face|null = null
-let currWalkStats: Geom.WalkStats|null = null
+let currWalkStats: Walk.Stats|null = null
 
 function updatePath() {
     if (currPathInitFace === null || arrowOrigin === null || arrowTarget === null || currWalkType == undefined) {
         return
     }
-    currWalkStats = Geom.walkStats(currWalkType, currPathInitFace.some, arrowOrigin, arrowTarget)
+    currWalkStats = Walk.stats(currWalkType, currPathInitFace.some, arrowOrigin, arrowTarget)
     drawPath()
 }
 
@@ -91,7 +122,7 @@ function drawPath() {
     let statusLine = ""
     let lines: string[] = []
     if (currPathInitFace !== null) {
-        lines.push(Geom.face2svg(currPathInitFace, "path-face"))
+        lines.push(Render.face2svg(currPathInitFace, "path-face"))
     }
     if (currWalkStats !== null) {
         const currPath = currWalkStats.path
@@ -100,7 +131,7 @@ function drawPath() {
                 const p1 = e.origin.pos
                 const p2 = e.target.pos
                 lines.push('<line x1="' + p1.x + '" y1="' + p1.y + '" x2="' + p2.x + '" y2="' + p2.y + '" class="path-edge"/>')
-                lines.push(Geom.face2svg(e.left, "path-face"))
+                lines.push(Render.face2svg(e.left, "path-face"))
             }
         })
         statusLine = `Faces:&nbsp;<span class="facecount">${currPath.length}</span>, Orientation Tests:&nbsp;<span class="orientcount">${currWalkStats.orient_tests}</span>`
@@ -123,29 +154,40 @@ function drawArrow() {
     arrowLayer.innerHTML = lines.join("\n")
 }
 
-let currWalkType: Geom.WalkType|undefined
+let currWalkType: WalkType|undefined
 
 function selectWalkHandler(this: HTMLElement, ev: Event) {
-    selectWalk(<Geom.WalkType>(<HTMLSelectElement>this).value)
+    selectWalk(<WalkType>(<HTMLSelectElement>this).value)
 }
 
-function selectWalk(walkType: Geom.WalkType) {
+function selectWalk(walkType: WalkType) {
     if (currWalkType && walkType == currWalkType) {
         return
     }
     document.getElementById("status-div")!.innerHTML = ''
     document.getElementById("select-mesh")!.classList.remove("warning")
     document.getElementById("select-walk")!.classList.remove("warning")
-    if (walkType == "Visibility" && (currMeshType != "Delaunay")) {
+    if (walkType == "Visibility" && currMeshType && (!currMeshType.includes("Delaunay"))) {
         document.getElementById("status-div")!.innerHTML = '<span class="warning">This combination may loop!</span>'
         document.getElementById("select-mesh")!.classList.add("warning")
     }
-    currWalkType = <Geom.WalkType>walkType
+    currWalkType = <WalkType>walkType
     updatePath()
 }
+
+function optionsHTML(options: string[]): string {
+    const lines: string[] = []
+    options.forEach((v) => {
+        lines.push(`<option value="${v}">${v}</option>`)
+    })
+    return lines.join('\n')
+}
+
+document.getElementById("select-mesh")!.innerHTML = optionsHTML(meshTypes)
+document.getElementById("select-walk")!.innerHTML = optionsHTML(walkTypes)
 
 document.getElementById("select-mesh")!.addEventListener("change", selectMeshHandler);
 document.getElementById("select-walk")!.addEventListener("change", selectWalkHandler);
 
-selectMesh(<Geom.MeshType>(<HTMLSelectElement>(document.getElementById("select-mesh")!)).value);
-selectWalk(<Geom.WalkType>(<HTMLSelectElement>(document.getElementById("select-walk")!)).value);
+selectMesh(<MeshType>(<HTMLSelectElement>(document.getElementById("select-mesh")!)).value);
+selectWalk(<Walk.Type>(<HTMLSelectElement>(document.getElementById("select-walk")!)).value);

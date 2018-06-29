@@ -7,44 +7,7 @@ type Edge = { origin: Vertex, target: Vertex }
 type Vertex = { pos: Geom.Vec2, incoming: Set<Edge>, outgoing: Set<Edge> }
 type Floorplan = { edges: Set<Edge>, vertices: Set<Vertex> }
 
-const seedRandom = Random.engines.nativeMath
-
-// we like: [ 327293021, 1315541527 ]
-// problematic fillets: [ -1818373956, 310693458 ]
-
-/*
-const loopingSeeds: { [key: string]: boolean} = {}
-const failingSeeds: { [key: string]: boolean} = {}
-
-let n = 0
-while (true) {
-    n++
-    let seedArray: [number, number]
-    do {
-        seedArray = [seedRandom(), seedRandom()]
-    } while (failingSeeds[`${seedArray}`]||loopingSeeds[`${seedArray}`])
-    const random = new Random(Random.engines.mt19937().seedWithArray(seedArray));
-    try {
-        console.log(`iteration ${n}: generating with seed: ${seedArray}`)
-        randomFloorplan(random);
-    } catch (e) {
-        console.log(`exception for seed: ${seedArray}`)
-        throw e
-    }
-}
-*/
-/*
-for (let seedArrayString in failingSeeds) {
-    const seedArray: number[] = seedArrayString.split(",").map(parseInt)
-    const random = new Random(Random.engines.mt19937().seedWithArray(seedArray))
-    randomFloorplan(random)
-}*/
-
-//const seedArray = [seedRandom(), seedRandom()]
-//console.log(seedArray)
-//const random = new Random(Random.engines.mt19937().seedWithArray(seedArray))
-
-export function randomFloorplanMesh(random: Random, sprinkle: boolean): Geom.Mesh {
+export function randomMesh(random: Random, subdivide: boolean, convexify: boolean): Geom.Mesh {
     const floorplan1 = randomFloorplan(random)
     const floorplan2 = randomFloorplan(random)
     const angle2 = random.real((30/180)*Math.PI, (60/180)*Math.PI)
@@ -58,7 +21,7 @@ export function randomFloorplanMesh(random: Random, sprinkle: boolean): Geom.Mes
     const delta2 = Geom.mult(delta1, -1)
     translateFloorplan(floorplan2, delta2)
     const m = floorplans2mesh([floorplan1, floorplan2])
-    if (sprinkle) {
+    if (!convexify && subdivide) {
         const edges = Geom.gatherEdges(m)
         const waitingList: Geom.Edge[] = []
         edges.forEach((ee) => {waitingList.push(ee)})
@@ -83,8 +46,10 @@ export function randomFloorplanMesh(random: Random, sprinkle: boolean): Geom.Mes
                 }
             }
         }
+        Geom.delaunafy(m)
+    } else if (convexify) {
+        Geom.convexify(m)
     }
-    Geom.delaunafy(m)
     return m
 }
 
@@ -129,61 +94,6 @@ function floorplans2mesh(floorplans: Floorplan[]): Geom.Mesh {
     Geom.delaunafy(m)
     Geom.floodFill(m)
     return m
-}
-
-function cells2html(cells: Cell[][]): string {
-    return `<html>
-    <head>
-        <title>Floorplan</title>
-    </head>
-    <style>
-    html, body {
-        height: 100%;
-    }
-    #floorplan-div {
-        height: 100%;
-        min-height: 100%;
-	    display: flex;
-	    flex-direction: column;
-    }
-    #floorplan-svg {
-        display: flex;
-		flex-direction: column;
-        justify-content: center;
-    }
-    .floorplan-line {
-        font-size: 12px;
-        stroke-width:1;
-        stroke:rgb(0,0,0);
-    }
-    .floorplan-inside {
-        stroke:rgb(0,0,0);
-        stroke-width:100;
-        fill:rgb(0,0,180);
-    }
-    .floorplan-outside {
-        fill:rgb(255,255,255);
-    }    
-    </style>
-  </head>
-  <body>
-    <div id="floorplan-div">
-      ${cells2svg(cells)}
-    </div>
-  </body>
-</html>`
-}
-
-function cells2svg(cells: Cell[][]): string {
-    return `<svg viewBox="-20000 -20000 40000 40000" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" version="1.1" id="floorplan-svg">
-    <defs>
-    </defs>
-    <g id="walls-layer">
-    </g>
-    <g id="solid-layer">
-        ${cells2svgSolid(cells)}
-    </g>
-</svg>`
 }
 
 function rotateFloorplan(floorplan: Floorplan, angle: number) {
@@ -453,24 +363,6 @@ function makeFloorplan(dim: number, lines: [number[], number[]], pattern: boolea
     return floorplan
 }
 
-function makeCells(dim: number, lines: [number[], number[]], pattern: boolean[][]): Cell[][] {
-    const [hor, ver] = lines
-    const cells: Cell[][] = []
-    for (let h = 0; h < dim; h++) {
-        const column: Cell[] = []
-        cells.push(column)
-        for (let v = 0; v < dim; v++) {
-            const cell = {
-                x: hor[h], y: ver[v],
-                width: hor[h + 1] - hor[h], height: ver[v + 1] - ver[v],
-                inside: pattern[h][v]
-            }
-            column.push(cell)
-        }
-    }
-    return cells
-}
-
 function randomPattern(random: Random, dim: number, bites: number): boolean[][] {
     if (dim < 6) {
         throw Error("dim must be 6 or greater")
@@ -564,4 +456,78 @@ function randomLines(random: Random, dim: number, size: number): [number[], numb
         ver.push(Math.round(y))
     }
     return [hor, ver]
+}
+
+function makeCells(dim: number, lines: [number[], number[]], pattern: boolean[][]): Cell[][] {
+    const [hor, ver] = lines
+    const cells: Cell[][] = []
+    for (let h = 0; h < dim; h++) {
+        const column: Cell[] = []
+        cells.push(column)
+        for (let v = 0; v < dim; v++) {
+            const cell = {
+                x: hor[h], y: ver[v],
+                width: hor[h + 1] - hor[h], height: ver[v + 1] - ver[v],
+                inside: pattern[h][v]
+            }
+            column.push(cell)
+        }
+    }
+    return cells
+}
+
+
+function cells2html(cells: Cell[][]): string {
+    return `<html>
+    <head>
+        <title>Floorplan</title>
+    </head>
+    <style>
+    html, body {
+        height: 100%;
+    }
+    #floorplan-div {
+        height: 100%;
+        min-height: 100%;
+	    display: flex;
+	    flex-direction: column;
+    }
+    #floorplan-svg {
+        display: flex;
+		flex-direction: column;
+        justify-content: center;
+    }
+    .floorplan-line {
+        font-size: 12px;
+        stroke-width:1;
+        stroke:rgb(0,0,0);
+    }
+    .floorplan-inside {
+        stroke:rgb(0,0,0);
+        stroke-width:100;
+        fill:rgb(0,0,180);
+    }
+    .floorplan-outside {
+        fill:rgb(255,255,255);
+    }    
+    </style>
+  </head>
+  <body>
+    <div id="floorplan-div">
+      ${cells2svg(cells)}
+    </div>
+  </body>
+</html>`
+}
+
+function cells2svg(cells: Cell[][]): string {
+    return `<svg viewBox="-20000 -20000 40000 40000" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" version="1.1" id="floorplan-svg">
+    <defs>
+    </defs>
+    <g id="walls-layer">
+    </g>
+    <g id="solid-layer">
+        ${cells2svgSolid(cells)}
+    </g>
+</svg>`
 }
