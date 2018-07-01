@@ -33,17 +33,13 @@ function generateVisibilityLooper(): Geom.Mesh {
     }
     const vs1 = drawCenteredRotatedSquare(20000, 0, false)
     const vs2 = drawCenteredRotatedSquare(10000, (-5/180)*Math.PI, true)
-    Geom.drawBetweenVertices(vs1[0], vs2[0], false, false)
-    Geom.drawBetweenVertices(vs1[1], vs2[0], false, false)
-    Geom.drawBetweenVertices(vs1[1], vs2[1], false, false)
-    Geom.drawBetweenVertices(vs1[2], vs2[1], false, false)
-    Geom.drawBetweenVertices(vs1[2], vs2[2], false, false)
-    Geom.drawBetweenVertices(vs1[3], vs2[2], false, false)
-    Geom.drawBetweenVertices(vs1[3], vs2[3], false, false)
-    Geom.drawBetweenVertices(vs1[0], vs2[3], false, false)
-    Geom.drawBetweenVertices(vs2[1], vs2[3], false, false)
+    const lines = [[vs1[0], vs2[0]], [vs1[1], vs2[0]], [vs1[1], vs2[1]], [vs1[2], vs2[1]], 
+        [vs1[2], vs2[2]], [vs1[3], vs2[2]], [vs1[3], vs2[3]], [vs1[0], vs2[3]], [vs2[1], vs2[3]] ]
+    lines.forEach((l) => {
+        const [a, b] = l
+        Geom.drawBetweenVertices(a, b, false, false)
+    })
     Geom.floodFill(mesh)
-    //Geom.drawBetweenVertices(vs1[0], vs2[0], false, false)
     return mesh
 }
 
