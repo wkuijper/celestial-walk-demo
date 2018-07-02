@@ -256,10 +256,48 @@ function primitives2html(title: string, primitives: Primitive[]): string {
     </html>`
 }
 
-export function html(title: string, horLbl: string, verLbl: string, datas: Map<string, number[]>) {
+export function html(title: string, horLbl: string, verLbl: string, datas: Map<string, number[]>): string {
     const primitives: Primitive[] = []
     drawGraph(title, horLbl, verLbl, datas, primitives)
     return primitives2html(title, primitives)
+}
+
+export function csv(title: string, horLbl: string, verLbl: string, datas: Map<string, number[]>): string {
+    const lines: string[] = []
+    lines.push(`# ${title}: ${verLbl} versus ${horLbl}`)
+    const headers: string[] = []
+    const columns: number[][] = []
+    let length = 0
+    datas.forEach((data,item) => {
+        headers.push(item)
+        columns.push(data)
+        if (data.length > length) {
+            length = data.length // this way we fail if columns differ in size
+        } 
+    })
+    lines.push(headers.join(','))
+    for (let c = 0; c < length; c++) {
+        const row: string[] = []
+        columns.forEach((data) => {
+            row.push(`${data[c]}`)
+        })
+        lines.push(row.join(','))
+    }
+    return lines.join('\n')
+}
+
+export function rowCSV(title: string, horLbl: string, verLbl: string, datas: Map<string, number[]>): string {
+    const lines: string[] = []
+    lines.push(`# ${title}: ${verLbl} versus ${horLbl}`)
+    datas.forEach((data,item) => {
+        const row: string[] = []
+        row.push(item)
+        data.forEach((datum) => {
+            row.push(`${datum}`)
+        })
+        lines.push(row.join(','))
+    })
+    return lines.join('\n')
 }
 
 /*
