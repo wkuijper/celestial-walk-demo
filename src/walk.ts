@@ -3,9 +3,68 @@ import { treatedAll } from './common'
 
 import * as Geom from './geom'
 
-export type Type = "Straight" | "Visibility" | "Celestial"
+export type Type = "Straight" | "Visibility" | "Celestial" | "Balanced Celestial"
 
 export type Stats = { orient_tests: number, path: Geom.HalfEdge[] }
+
+export function approxBisector(e: Geom.HalfEdge, enext: Geom.HalfEdge): Geom.Line {
+    return Geom.lineByPointAndDir(e.target.pos, Geom.rotateRight(Geom.minus(enext.target.pos, e.origin.pos)))
+}
+
+export function balancedCelestialStats(einit: Geom.HalfEdge, p: Geom.Vec2): Stats {
+    let tests: number = 0
+    let e: Geom.HalfEdge = einit
+    let path: Geom.HalfEdge[] = [e]
+    if (++tests && Geom.strictlyRightOf(Geom.line(e), p)) {
+        if (!e.twin) {
+            throw { geom: true, message: "out of bounds" }
+        }
+        e = e.twin
+        path.push(e)
+    }
+    let forward: boolean = false
+    let e2: Geom.HalfEdge 
+    if (forward) {
+        e2 = e.next
+    } else {
+        e2 = e.prev
+    }
+    while (e !== e2) {
+        if (++tests && Geom.strictlyRightOf(Geom.line(e2), p)) {
+            if (forward) {
+                let e3 = e2.next
+                while (e2.obtuse && (++tests && Geom.leftOrOnTopOf(approxBisector(e2, e3), p))) {
+                    e2 = e3
+                    e3 = e3.next
+                }
+            } else {
+                let e3 = e2.prev
+                while (e3.obtuse && (++tests && Geom.rightOrOnTopOf(approxBisector(e3, e2), p))) {
+                    e2 = e3
+                    e3 = e3.prev
+                }
+            }
+            if (!e2.twin) {
+                throw { geom: true, message: "out of bounds" }
+            }
+            e = e2.twin
+            path.push(e)
+            //forward = !forward
+            if (forward) {
+                e2 = e.next
+            } else {
+                e2 = e.prev
+            }
+        } else {
+            if (forward) {
+                e2 = e2.next
+            } else {
+                e2 = e2.prev
+            }
+        }
+    }
+    return { orient_tests: tests, path: path }
+}
 
 export function celestialStats(einit: Geom.HalfEdge, p: Geom.Vec2): Stats {
     let tests: number = 0
@@ -115,6 +174,8 @@ export function straightStats(einit: Geom.HalfEdge, p1: Geom.Vec2, p2: Geom.Vec2
 export function stats(walkType: Type, initEdge: Geom.HalfEdge, p1: Geom.Vec2, p2: Geom.Vec2): Stats {
     if (walkType == "Celestial") {
         return celestialStats(initEdge, p2)
+    } else if (walkType == "Balanced Celestial") {
+        return balancedCelestialStats(initEdge, p2)
     } else if (walkType == "Straight") {
         return straightStats(initEdge, p1, p2)
     } else if (walkType == "Visibility") {

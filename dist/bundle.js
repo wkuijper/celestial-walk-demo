@@ -887,7 +887,7 @@ const Walk = __webpack_require__(5);
 const Render = __webpack_require__(6);
 const Random = __webpack_require__(7);
 const meshTypes = ["Delaunay Pointcloud", "Thintriangles Pointcloud", "Convex Pointcloud", "Delaunayish Floorplan", "Convex Floorplan", "Subdivided Floorplan", "Visibility Looper"];
-const walkTypes = ["Straight", "Visibility", "Celestial"];
+const walkTypes = ["Straight", "Visibility", "Celestial", "Balanced Celestial"];
 const random = new Random(Random.engines.nativeMath);
 function generateVisibilityLooper() {
     const mesh = Geom.mesh();
@@ -908,17 +908,13 @@ function generateVisibilityLooper() {
     }
     const vs1 = drawCenteredRotatedSquare(20000, 0, false);
     const vs2 = drawCenteredRotatedSquare(10000, (-5 / 180) * Math.PI, true);
-    Geom.drawBetweenVertices(vs1[0], vs2[0], false, false);
-    Geom.drawBetweenVertices(vs1[1], vs2[0], false, false);
-    Geom.drawBetweenVertices(vs1[1], vs2[1], false, false);
-    Geom.drawBetweenVertices(vs1[2], vs2[1], false, false);
-    Geom.drawBetweenVertices(vs1[2], vs2[2], false, false);
-    Geom.drawBetweenVertices(vs1[3], vs2[2], false, false);
-    Geom.drawBetweenVertices(vs1[3], vs2[3], false, false);
-    Geom.drawBetweenVertices(vs1[0], vs2[3], false, false);
-    Geom.drawBetweenVertices(vs2[1], vs2[3], false, false);
+    const lines = [[vs1[0], vs2[0]], [vs1[1], vs2[0]], [vs1[1], vs2[1]], [vs1[2], vs2[1]],
+        [vs1[2], vs2[2]], [vs1[3], vs2[2]], [vs1[3], vs2[3]], [vs1[0], vs2[3]], [vs2[1], vs2[3]]];
+    lines.forEach((l) => {
+        const [a, b] = l;
+        Geom.drawBetweenVertices(a, b, false, false);
+    });
     Geom.floodFill(mesh);
-    //Geom.drawBetweenVertices(vs1[0], vs2[0], false, false)
     return mesh;
 }
 function generateMesh(meshType) {
@@ -1699,6 +1695,70 @@ function cells2svg(cells) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const common_1 = __webpack_require__(1);
 const Geom = __webpack_require__(0);
+function approxBisector(e, enext) {
+    return Geom.lineByPointAndDir(e.target.pos, Geom.rotateRight(Geom.minus(enext.target.pos, e.origin.pos)));
+}
+exports.approxBisector = approxBisector;
+function balancedCelestialStats(einit, p) {
+    let tests = 0;
+    let e = einit;
+    let path = [e];
+    if (++tests && Geom.strictlyRightOf(Geom.line(e), p)) {
+        if (!e.twin) {
+            throw { geom: true, message: "out of bounds" };
+        }
+        e = e.twin;
+        path.push(e);
+    }
+    let forward = false;
+    let e2;
+    if (forward) {
+        e2 = e.next;
+    }
+    else {
+        e2 = e.prev;
+    }
+    while (e !== e2) {
+        if (++tests && Geom.strictlyRightOf(Geom.line(e2), p)) {
+            if (forward) {
+                let e3 = e2.next;
+                while (e2.obtuse && (++tests && Geom.leftOrOnTopOf(approxBisector(e2, e3), p))) {
+                    e2 = e3;
+                    e3 = e3.next;
+                }
+            }
+            else {
+                let e3 = e2.prev;
+                while (e3.obtuse && (++tests && Geom.rightOrOnTopOf(approxBisector(e3, e2), p))) {
+                    e2 = e3;
+                    e3 = e3.prev;
+                }
+            }
+            if (!e2.twin) {
+                throw { geom: true, message: "out of bounds" };
+            }
+            e = e2.twin;
+            path.push(e);
+            //forward = !forward
+            if (forward) {
+                e2 = e.next;
+            }
+            else {
+                e2 = e.prev;
+            }
+        }
+        else {
+            if (forward) {
+                e2 = e2.next;
+            }
+            else {
+                e2 = e2.prev;
+            }
+        }
+    }
+    return { orient_tests: tests, path: path };
+}
+exports.balancedCelestialStats = balancedCelestialStats;
 function celestialStats(einit, p) {
     let tests = 0;
     let e = einit;
@@ -1811,6 +1871,9 @@ function stats(walkType, initEdge, p1, p2) {
     if (walkType == "Celestial") {
         return celestialStats(initEdge, p2);
     }
+    else if (walkType == "Balanced Celestial") {
+        return balancedCelestialStats(initEdge, p2);
+    }
     else if (walkType == "Straight") {
         return straightStats(initEdge, p1, p2);
     }
@@ -1830,6 +1893,71 @@ exports.stats = stats;
 
 Object.defineProperty(exports, "__esModule", { value: true });
 const Geom = __webpack_require__(0);
+const tikzScale = 1 / 10000;
+function face2tikz(face, clss) {
+    const p = face.some.origin.pos;
+    const words = [`    \\draw[${clss}] (${p.x * tikzScale}, ${p.y * tikzScale})`];
+    Geom.gatherFaceEdges(face).forEach((e) => {
+        const p = e.target.pos;
+        words.push(` -- (${p.x * tikzScale}, ${p.y * tikzScale})`);
+    });
+    words.push(" -- cycle;");
+    return words.join("");
+}
+exports.face2tikz = face2tikz;
+function mesh2tikz(title, m, delaunayFaces, walkStats, line, showAll) {
+    function drawStuff() {
+        const lines = [];
+        const faces = Geom.gatherFaces(m);
+        faces.forEach((f) => {
+            lines.push(face2tikz(f, f.filled ? "mesh_filled_face" : "mesh_face"));
+        });
+        const edges = Geom.gatherEdges(m);
+        edges.forEach((ee) => {
+            if (ee.constrained) {
+                const e = ee.half;
+                const p1 = e.origin.pos;
+                const p2 = e.target.pos;
+                lines.push(`    \\draw [mesh_constrained_edge] (${p1.x * tikzScale},${p1.y * tikzScale}) -- (${p2.x * tikzScale},${p2.y * tikzScale});`);
+            }
+        });
+        if (delaunayFaces) {
+            faces.forEach((f) => {
+                if (Geom.isDelaunayTriangle(f)) {
+                    lines.push(face2tikz(f, "delaunay_face"));
+                }
+            });
+        }
+        if (walkStats) {
+            walkStats.path.forEach((e) => {
+                const p1 = e.origin.pos;
+                const p2 = e.target.pos;
+                lines.push(`    \\draw [path_edge] (${p1.x * tikzScale},${p1.y * tikzScale}) -- (${p2.x * tikzScale},${p2.y * tikzScale});`);
+                lines.push(face2tikz(e.left, "path_face"));
+            });
+        }
+        if (line) {
+            lines.push(`    \\draw [arrow] (${line.p1.x * tikzScale},${line.p1.y * tikzScale}) -- (${line.p2.x * tikzScale},${line.p2.y * tikzScale});`);
+        }
+        return lines.join('\n');
+    }
+    return `%\\renewcommand{\\autogeneratedfiguretitle}{${title}}
+\\begin{tikzpicture}[${showAll ? "scale=.5" : ""}]
+  \\tikzstyle{mesh_face}=[fill=white,draw=gray,line width=.25pt]
+  \\tikzstyle{mesh_filled_face}=[fill=gray!40,draw=gray,line width=.25pt]
+  \\tikzstyle{mesh_constrained_edge}=[draw=black,line width=1pt]
+  \\tikzstyle{delaunay_face}=[fill=yellow,fill opacity=0.3]
+  \\tikzstyle{path_face}=[fill=green,fill opacity=0.5]
+  \\tikzstyle{path_edge}=[draw=magenta,draw opacity=0.5,line width=2pt]
+  \\tikzstyle{arrow}=[->,draw=blue,line width=2pt,draw opacity=0.5]
+  ${!showAll ? "\\draw[black,line width=1pt] (-3,-3) rectangle (3,3);" : ""}
+  \\begin{scope}
+    ${!showAll ? "\\clip(-3,-3) rectangle (3,3);" : ""}
+    ${drawStuff()}
+  \\end{scope} 
+\\end{tikzpicture}`;
+}
+exports.mesh2tikz = mesh2tikz;
 function mesh2html(title, m, delaunayFaces, walkStats, line, showAll) {
     return `<html>
   <head>
@@ -1973,7 +2101,7 @@ function mesh2svg(m, delaunayFaces, walkStats, line, showAll) {
     </defs>
     <g id="mesh-face-layer">
         ${meshFaceLayer()}
-    </g>    
+    </g>
     <g id="delaunay-layer">
         ${delaunayLayer()}
     </g>

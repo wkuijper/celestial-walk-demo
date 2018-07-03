@@ -31,8 +31,8 @@ arrowTypes.forEach((arrowType) => {
 type MeshType = "Delaunay Pointcloud"|"Thintriangles Pointcloud"|"Convex Pointcloud"|"Delaunayish Floorplan"|"Convex Floorplan"|"Subdivided Floorplan"
 const meshTypes: MeshType[] = ["Delaunay Pointcloud", "Thintriangles Pointcloud", "Convex Pointcloud", "Delaunayish Floorplan", "Convex Floorplan", "Subdivided Floorplan"]
 
-type WalkType = "Straight"|"Visibility"|"Celestial"
-const walkTypes: WalkType[] = ["Straight", "Visibility", "Celestial"]
+type WalkType = "Straight"|"Visibility"|"Celestial"|"Balanced Celestial"
+const walkTypes: WalkType[] = ["Straight", "Visibility", "Celestial", "Balanced Celestial"]
 
 type QuantType = "orient_tests"|"traversed_faces"
 const quantTypes: QuantType[] = ["orient_tests", "traversed_faces"]
@@ -95,6 +95,7 @@ for (var n = 0; n < 0x010; n++) {
         const random = new Random(Random.engines.mt19937().seedWithArray(seedArray))
         const mesh: Geom.Mesh = randomMesh(random, meshType)
         fs.writeFileSync("./benchmarks/meshes/" + name1 + ".html", Render.mesh2html(name1, mesh, meshType.includes("Delaunay"), undefined, undefined, true))
+        fs.writeFileSync("./benchmarks/meshes/" + name1 + ".tikz", Render.mesh2tikz(name1, mesh, meshType.includes("Delaunay"), undefined, undefined, false))
         arrowTypes.forEach((arrowType) => {
             const raw3 = raw2.get(arrowType)!
             const name2 = `${name1}_${arrowType}`
@@ -105,6 +106,7 @@ for (var n = 0; n < 0x010; n++) {
                 const name3 = `${name2}_${nameify(walkType)}`
                 const walkStats = Walk.stats(walkType, initEdge, arrow.p1, arrow.p2)
                 fs.writeFileSync("./benchmarks/paths/" + name3 + ".html", Render.mesh2html(name1, mesh, false, walkStats, arrow, true))
+                fs.writeFileSync("./benchmarks/paths/" + name3 + ".tikz", Render.mesh2tikz(name1, mesh, false, walkStats, arrow, false))
                 raw4.get("traversed_faces")!.push(walkStats.path.length)
                 raw4.get("orient_tests")!.push(walkStats.orient_tests)
             })

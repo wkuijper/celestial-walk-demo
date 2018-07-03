@@ -9,8 +9,8 @@ import * as Random from 'random-js'
 type MeshType = "Delaunay Pointcloud"|"Thintriangles Pointcloud"|"Convex Pointcloud"|"Delaunayish Floorplan"|"Convex Floorplan"|"Subdivided Floorplan"|"Visibility Looper"
 const meshTypes: MeshType[] = ["Delaunay Pointcloud", "Thintriangles Pointcloud", "Convex Pointcloud", "Delaunayish Floorplan", "Convex Floorplan", "Subdivided Floorplan", "Visibility Looper"]
 
-type WalkType = "Straight"|"Visibility"|"Celestial"
-const walkTypes: WalkType[] = ["Straight", "Visibility", "Celestial"]
+type WalkType = "Straight"|"Visibility"|"Celestial"|"Balanced Celestial"
+const walkTypes: WalkType[] = ["Straight", "Visibility", "Celestial", "Balanced Celestial"]
 
 const random = new Random(Random.engines.nativeMath)
 
