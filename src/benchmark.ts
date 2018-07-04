@@ -95,7 +95,7 @@ for (var n = 0; n < 0x010; n++) {
         const random = new Random(Random.engines.mt19937().seedWithArray(seedArray))
         const mesh: Geom.Mesh = randomMesh(random, meshType)
         fs.writeFileSync("./benchmarks/meshes/" + name1 + ".html", Render.mesh2html(name1, mesh, meshType.includes("Delaunay"), undefined, undefined, true))
-        fs.writeFileSync("./benchmarks/meshes/" + name1 + ".tikz", Render.mesh2tikz(name1, mesh, meshType.includes("Delaunay"), undefined, undefined, false))
+        fs.writeFileSync("./benchmarks/meshes/" + name1 + ".tikz", Render.mesh2tikz(name1, mesh, false, undefined, undefined, false))
         arrowTypes.forEach((arrowType) => {
             const raw3 = raw2.get(arrowType)!
             const name2 = `${name1}_${arrowType}`
@@ -175,6 +175,8 @@ meshTypes.forEach((meshType) => {
     })
     fs.writeFileSync(`./benchmarks/graphs/shootouts_per_meshtype/${nameify(meshType)}.html`, 
         Graph.html(`Comparison of the Various Walk on ${meshType} Meshes`, "Walking Algorithm", "Orientation Tests", datas))
+    fs.writeFileSync(`./benchmarks/graphs/shootouts_per_meshtype/${nameify(meshType)}.tikz`, 
+        Graph.tikz(`Comparison of the Various Walk on ${meshType} Meshes`, "Walking Algorithm", "Orientation Tests", datas))
     fs.writeFileSync(`./benchmarks/graphs/shootouts_per_meshtype/${nameify(meshType)}.csv`, 
         Graph.csv(`Comparison of the Various Walk on ${meshType} Meshes`, "Walking Algorithm", "Orientation Tests", datas))
     fs.writeFileSync(`./benchmarks/graphs/shootouts_per_meshtype/${nameify(meshType)}_row.csv`, 
@@ -193,6 +195,8 @@ meshTypes.forEach((meshType) => {
 })
 fs.writeFileSync(`./benchmarks/graphs/shootout.html`, 
     Graph.html(`Comparison of the Various Walk on All Mesh Types`, "Walking Algorithm", "Orientation Tests", datas))
+fs.writeFileSync(`./benchmarks/graphs/shootout.tikz`, 
+    Graph.tikz(`Comparison of the Various Walk on All Mesh Types`, "Walking Algorithm", "Orientation Tests", datas))
 fs.writeFileSync(`./benchmarks/graphs/shootout.csv`, 
     Graph.csv(`Comparison of the Various Walk on All Mesh Types`, "Walking Algorithm", "Orientation Tests", datas))
 fs.writeFileSync(`./benchmarks/graphs/shootout_row.csv`, 

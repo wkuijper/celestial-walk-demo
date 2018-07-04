@@ -2,6 +2,8 @@ import { treatedAll } from "./common";
 
 type BoundingBox = { x1: number, y1: number, x2: number, y2: number }
 
+const tikzScale = 1/120
+
 function joinBoundingBoxes(bb1: BoundingBox, bb2: BoundingBox): BoundingBox {
     return { 
         x1: Math.min(bb1.x1, bb2.x1), y1: Math.min(bb1.y1, bb2.y1), 
@@ -11,6 +13,7 @@ function joinBoundingBoxes(bb1: BoundingBox, bb2: BoundingBox): BoundingBox {
 abstract class Primitive {
     abstract boundingBox(): BoundingBox
     abstract svg(): string
+    abstract tikz(): string
 }
 
 type Point = { x: number, y: number }
@@ -26,6 +29,9 @@ class Line extends Primitive {
     }
     svg(): string {
         return `<line x1="${this.p1.x}" y1="${this.p1.y}" x2="${this.p2.x}" y2="${this.p2.y}" class="${this.style}"/>`
+    }
+    tikz(): string {
+        return `\\draw [${this.style.replace(/-/g,'_')}] (${this.p1.x*tikzScale}, ${-this.p1.y*tikzScale}) -- (${this.p2.x*tikzScale},${-this.p2.y*tikzScale});`
     }
     boundingBox(): BoundingBox {
         return { 
@@ -69,6 +75,16 @@ class Text extends Primitive {
         }
         return treatedAll(this.orientAlign)
     }
+    tikz(): string {
+        if (this.orientAlign == "hor_left") {
+            return `\\draw (${this.pos.x*tikzScale}, ${-this.pos.y*tikzScale}) node [${this.style.replace(/-/g,'_')},anchor=east] {${this.text}};`
+        } else if (this.orientAlign == "hor_center") {
+            return `\\draw (${this.pos.x*tikzScale}, ${-this.pos.y*tikzScale}) node [${this.style.replace(/-/g,'_')},anchor=center] {${this.text}};`
+        } else if (this.orientAlign == "ver_center") {
+            return `\\draw (${this.pos.x*tikzScale}, ${-this.pos.y*tikzScale}) node [${this.style.replace(/-/g,'_')},anchor=center] {\\rotatebox{90}{${this.text}}};`
+        }
+        return treatedAll(this.orientAlign) 
+    }
 }
 
 type Axis = { label: string, major: number, minor: number, min: number, max: number }
@@ -77,7 +93,9 @@ function drawAxis(axis: Axis, scale: number, out: Primitive[]) {
     // draw vertical line
     out.push(new Line({x: 0, y: scale*axis.min}, {x: 0, y: scale*axis.max}, "graph-frame"))
     // draw axis label
-    out.push(new Text({x: -80, y: scale*(axis.min+axis.max)/2}, axis.label, "ver_center", "graph-label"))
+    if (axis.label) {
+        out.push(new Text({x: -80, y: scale*(axis.min+axis.max)/2}, axis.label, "ver_center", "graph-axis-lbl-text"))
+    }
     // draw major ticks
     {
         const majorPts = 8
@@ -146,7 +164,7 @@ function calcMeanAndStddev(data: number[]): [number, number] {
 }
 
 function drawGraph(title: string, horLbl: string, verLbl: string, datas: Map<string, number[]>, out: Primitive[]) {
-    const canvasHeight = 600 // pts
+    const canvasHeight = 500 // pts
     const axis = sizedAxis(verLbl, datas)
     const scale = -(canvasHeight/(axis.max-axis.min))
     drawAxis(axis, scale, out)
@@ -157,8 +175,8 @@ function drawGraph(title: string, horLbl: string, verLbl: string, datas: Map<str
         x += 120
         const [label1, label2, label3] = item.split(' ').concat(["", "", ""])
         out.push(new Text({ x: x, y: ybot+40 }, label1, "hor_center", "graph-hor-item-text"))
-        out.push(new Text({ x: x, y: ybot+60 }, label2, "hor_center", "graph-hor-item-text"))
-        out.push(new Text({ x: x, y: ybot+80 }, label3, "hor_center", "graph-hor-item-text"))
+        out.push(new Text({ x: x, y: ybot+70 }, label2, "hor_center", "graph-hor-item-text"))
+        out.push(new Text({ x: x, y: ybot+100 }, label3, "hor_center", "graph-hor-item-text"))
         out.push(new Line({ x: x, y: ytop }, { x: x, y: ybot }, "graph-faint-frame"))
         data.forEach((datum) => {
             const y = scale*datum
@@ -168,7 +186,7 @@ function drawGraph(title: string, horLbl: string, verLbl: string, datas: Map<str
         })
         const [mean, stddev] = calcMeanAndStddev(data)
         const ys = [mean+stddev, mean, mean-stddev].map((datum) => scale*datum)
-        const boxPts = 8
+        const boxPts = 12
         ys.forEach((y) => {
             out.push(new Line({ x: x-boxPts, y: y }, { x: x+boxPts, y: y }, "graph-interval"))
         })
@@ -178,8 +196,12 @@ function drawGraph(title: string, horLbl: string, verLbl: string, datas: Map<str
     out.push(new Line({x:0, y:ytop}, {x:x, y:ytop}, "graph-frame"))
     out.push(new Line({x:0, y:ybot}, {x:x, y:ybot}, "graph-frame"))
     out.push(new Line({x:x, y:ytop}, {x:x, y:ybot}, "graph-frame"))
-    out.push(new Text({ x: x/2, y: ybot+100}, horLbl, "hor_center", "graph-axis-lbl-text"))
-    out.push(new Text({ x: x/2, y: ytop-40}, title, "hor_center", "graph-axis-lbl-text"))
+    if (horLbl) {
+        out.push(new Text({ x: x/2, y: ybot+130}, horLbl, "hor_center", "graph-axis-lbl-text"))
+    }
+    if (title) {
+        out.push(new Text({ x: x/2, y: ytop-40}, title, "hor_center", "graph-title-text"))
+    }
 }
 
 function primitivesBoundingBox(primitives: Primitive[]): BoundingBox  {
@@ -190,6 +212,27 @@ function primitivesBoundingBox(primitives: Primitive[]): BoundingBox  {
     return bb
 }
 
+function primitives2tikz(primitives: Primitive[]): string {
+    function drawStuff() {
+        const lines: string[] = []
+        primitives.forEach((primitive) => {
+            lines.push(primitive.tikz())
+        })
+        return lines.join('\n')
+    }
+    return `\\begin{tikzpicture}
+      \\tikzstyle{graph_frame}=[draw=black,line width=.5pt]
+      \\tikzstyle{graph_interval}=[draw=black,line width=.5pt]
+      \\tikzstyle{graph_faint_frame}=[draw=black,draw opacity=.4,line width=.5pt]
+      \\tikzstyle{graph_marker}=[draw=black,draw opacity=.4,line width=.5pt]
+      \\tikzstyle{graph_ver_tick_text}=[color=black,font=\\tiny]
+      \\tikzstyle{graph_title_text}=[color=black,font=\\footnotesize]
+      \\tikzstyle{graph_axis_lbl_text}=[color=black,font=\\scriptsize]
+      \\tikzstyle{graph_hor_item_text}=[color=black,font=\\tiny]
+      ${drawStuff()}
+    \\end{tikzpicture}`
+}
+
 function primitives2svg(primitives: Primitive[]): string {
     const bb = primitivesBoundingBox(primitives)
     const lines: string[] = [`<svg viewBox="${bb.x1} ${bb.y1} ${bb.x2-bb.x1} ${bb.y2-bb.y1}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" version="1.1" id="graph-svg">
@@ -198,7 +241,7 @@ function primitives2svg(primitives: Primitive[]): string {
         lines.push(primitive.svg())
     })
     lines.push(`</g></svg>`)
-    return lines.join("\n")
+    return lines.join('\n')
 }
 
 function primitives2html(title: string, primitives: Primitive[]): string {
@@ -254,6 +297,12 @@ function primitives2html(title: string, primitives: Primitive[]): string {
         </div>
       </body>
     </html>`
+}
+
+export function tikz(title: string, horLbl: string, verLbl: string, datas: Map<string, number[]>): string {
+    const primitives: Primitive[] = []
+    drawGraph("", "", "", datas, primitives)
+    return primitives2tikz(primitives)
 }
 
 export function html(title: string, horLbl: string, verLbl: string, datas: Map<string, number[]>): string {
